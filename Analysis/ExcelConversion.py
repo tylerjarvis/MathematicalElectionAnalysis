@@ -12,8 +12,7 @@ class ExcelConversion(object):
     RegVoterIdx, TimesCountedIdx, TotalVotesIdx = 1, 2, 3
 
     def __init__(self, filename:str, delimiter:str=None, cursor:sqlite3.Cursor=None):
-        """Creates a thing
-
+        """
         @param: filename A CSV/TSV file to read in
         @param: delimiter Optional delimiter to use; if None, it is inferred from the extension
         @param: cursor The database cursor for inserting records. Not currently implemented.        
@@ -29,7 +28,6 @@ class ExcelConversion(object):
         else:
             raise "Delimiter unhandled"
 
-
         with open(self.filename, 'r') as fh:
             reader = csv.reader(fh, delimiter= self.delimiter)
             self.lines = [line for line in reader]
@@ -37,8 +35,6 @@ class ExcelConversion(object):
         self.Race = None
         self.Precincts = []
         self.Candidates = []
-
-        """aoeu"""
         self.Results = []
 
     def Parse(self):
@@ -58,8 +54,7 @@ class ExcelConversion(object):
 
         for (c,candidate) in candidates:
             for (p,precinct) in precincts:
-                # add a tuple of (candidate name, precinct name, total votes
-                # received)
+                # Add a tuple of (candidate name, precinct name, #votes received)
                 # the 'totals' line is offset five from the precinct name
                 self.Results.append((candidate, precinct, int(self.lines[p + 5][c])))
         
@@ -69,3 +64,4 @@ if __name__ == '__main__':
     ec.Parse()
     print("Candidates: %s" % ', '.join(ec.Candidates))
     print("Precincts: %s" % ', '.join(ec.Precincts))
+    print("Found %d results (%d candidates × %d precincts)" % tuple(map(len, [ec.Results, ec.Candidates, ec.Precincts])))
