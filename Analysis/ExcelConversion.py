@@ -1,5 +1,7 @@
 import sqlite3
 import csv
+import uuid
+
 
 
 class RaceConversion(object):
@@ -15,10 +17,10 @@ class RaceConversion(object):
     def __init__(self, lines):
         self.lines = lines
 
-        self.Race = None
-        self.Precincts = []
-        self.Candidates = []
-        self.Results = []
+        self.Race : str = None
+        self.Precincts : List[str] = []
+        self.Candidates : list[str] = []
+        self.Results : List[tuple(str,str,int)] = []
 
     def Parse(self):
         # First cell is the race, eg "US President"
@@ -50,13 +52,11 @@ class RaceConversion(object):
                 self.Results.append((candidate, precinct, int(precinct_votes[c])))
  
 class ExcelConversion(object):
-    def __init__(self, filename:str, delimiter:str=None, cursor:sqlite3.Cursor=None):
+    def __init__(self, filename:str, delimiter:str=None):
         """
         @param: filename A CSV/TSV file to read in
         @param: delimiter Optional delimiter to use; if None, it is inferred from the extension
-        @param: cursor The database cursor for inserting records. Not currently implemented.        
         """
-        self.cursor = cursor
         self.filename = filename
         if delimiter != None:
             self.delimiter = delimiter
@@ -71,7 +71,7 @@ class ExcelConversion(object):
             reader = csv.reader(fh, delimiter= self.delimiter)
             self.lines = [line for line in reader]
 
-        self.Races = []
+        self.Races : list[RaceConversion] = []
 
     def Parse(self):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
@@ -99,10 +99,60 @@ class ExcelConversion(object):
             race.Parse()
 
             self.Races.append(race)
-       
+
+class ElectionDatabase(object):
+    def __init__(self, filename):
+        self.db = sqlite3.connect(filename)
+
+    def GetCandidateId(self, name): return self.GetId('Candidate', 'Name', name)
+    def GetDistrictId(self, desc): return self.GetId('District', 'Name', desc)
+    def GetElectionId(self, desc): return self.GetId('Election', 'Description', desc)
+    def GetPrecinctnId(self, name): return self.GetId('Precinct', 'Name', name)
+    def GetRaceId(self, desc): return self.GetId('Race', 'Description', desc)
+
+    def GetId(self, table, column, value):
+        c = self.db.cursor()
+        q = 'SELECT %sId FROM %s WHERE %s = ?' % (table, table, column)
+        c.execute(q, (value,))
+        result = c.fetchone()
+
+        if type(result) == tuple:
+            return result[0]
+        
+        # need to insert
+        id = str(uuid.uuid4())
+        q = 'INSERT INTO %s (%sId,%s) VALUES (?,?)' % (table, table, column)
+        c.execute(q, (id, value))
+        self.db.commit()
+        return id
+
+    def InsertResults(self, candidateId, precinctId, raceId, votes):
+        c = self.db.cursor()
+        # Check if we have results for this 3-tuple
+        c.execute("SELECT * FROM Results WHERE CandidateId = ? AND PrecinctId = ? AND RaceId = ?", (candidateId, precinctId, raceId))
+        result = c.fetchone()
+        if type(result) == tuple: return
+
+        q = 'INSERT INTO Results (CandidateId, PrecinctId, RaceId, VotesReceived) VALUES (?, ?, ?, ?)'
+        c.execute(q, (candidateId, precinctId, raceId, votes))
+
+    def CommitParsedResults(self, ec: ExcelConversion, election_name: str):
+        electionId = self.GetElectionId(election_name)
+        for rc in ec.Races:
+            raceId = self.GetRaceId(rc.Race)
+            for (candidate, precinct, votes) in rc.Results:
+                # make sure candidate and precinct records exist
+                candidateId = self.GetCandidateId(candidate)
+                precinctId = self.GetPrecinctnId(precinct)
+
+                self.InsertResults(candidateId, precinctId, raceId, votes)
+
+
 
 if __name__ == '__main__':
-    ec = ExcelConversion('beaver.2008.SOVC (1).tsv')
-    ec.Parse()
+    converter = ExcelConversion('beaver.2008.SOVC (1).tsv')
+    converter.Parse()
 
-    print("Found %d races" % len(ec.Races))
+    db = ElectionDatabase(r'C:\Users\adams\Source\Repos\T4DataEntry\T4DataEntry\bin\Debug\data.sqlite')
+    db.CommitParsedResults(converter, '2008 General Election')
+    
