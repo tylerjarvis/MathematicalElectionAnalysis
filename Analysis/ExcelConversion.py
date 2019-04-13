@@ -1,7 +1,7 @@
 import sqlite3
 import csv
 import uuid
-
+import sys, os.path
 
 
 class RaceConversion(object):
@@ -169,7 +169,12 @@ class ElectionDatabase(object):
 
 
 if __name__ == '__main__':
-    converter = ExcelConversion('2018 General Election - Box Elder Precinct-Level Results.tsv')
+    filename = '2018 General Election - Box Elder Precinct-Level Results.tsv'
+
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        filename = sys.argv[1]
+
+    converter = ExcelConversion(filename)
     converter.Parse()
 
     print("Parsing completed")
@@ -187,6 +192,6 @@ if __name__ == '__main__':
         print("    " + precinct)
     print()
 
-    db = ElectionDatabase(r'C:\Users\adams\Source\Repos\T4DataEntry\T4DataEntry\bin\Debug\data.sqlite')
-    db.CommitParsedResults(converter, '2018 General Election')
+    #db = ElectionDatabase(r'C:\Users\adams\Source\Repos\T4DataEntry\T4DataEntry\bin\Debug\data.sqlite')
+    #db.CommitParsedResults(converter, '2018 General Election')
     
