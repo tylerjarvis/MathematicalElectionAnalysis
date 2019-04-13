@@ -12,7 +12,7 @@ class RaceConversion(object):
 
     # fields in the CSV that are guaranteed and in the same place for every
     # race.
-    RegVoterIdx, TimesCountedIdx, TotalVotesIdx = 1, 2, 3
+    RegVoterIdx, TotalVotesIdx = 1, 2
 
     def __init__(self, lines):
         self.lines = lines
@@ -28,28 +28,45 @@ class RaceConversion(object):
         
         # Second line is empty
 
-        # Get the candidates.  These are on the same line as Registered
-        # Voters, etc.
+        # Get the candidate names. These are on the same line as 'Registered Voters', etc.
         candidates = [ (i, self.lines[2][i]) for i in range(RaceConversion.TotalVotesIdx + 1, len(self.lines[2])) if self.lines[2][i].strip() != '']
         self.Candidates = [name for (i,name) in candidates]
 
-        # Precincts are listed as rows starting at index 5 and each take up
-        # six rows
-        precinct_end = [i for i in range(5, len(self.lines)) if self.lines[i][0].strip() == ''][0]
-        precincts = [(i, self.lines[i][0]) for i in range(5, precinct_end, 6) if self.lines[i][0].strip() != '']
+        # Precinct names are listed in rows starting at index 4 and each take up five rows
+
+        # Get the index of the last row of all precincts. If the last row of our data is the last row of precincts,
+        # then the empty string condition will fail, so check for that.
+        precinct_end = [i for i in range(4, len(self.lines)) if self.lines[i][0].strip() in ('', 'Total')]
+        precinct_end = precinct_end[0] if (len(precinct_end) > 0) else len(self.lines)
+        precincts = [(i, self.lines[i][0]) for i in range(4, precinct_end, 5) if self.lines[i][0].strip() != '']
         self.Precincts = [name for (i,name) in precincts]
 
         for (p,precinct) in precincts:
-            # Vote counts for this precinct. The 'totals' line is offset five from the precinct name.
-            precinct_votes = [cell for cell in self.lines[p + 5]]
+            # The updated format (as of ~2019-04-13) lacks a 'Totals' column, so this has to be reconstructed from the
+            # sum of Normal, Absentee, Early Voting, and Provisional, which are the four rows (in order) after the precinct name.
+            # The 'Total Votes' column is +2 from the precinct name.
+            for (c, candidate) in candidates:
+                counts = [
+                    self.lines[p+1][c], # normal
+                    self.lines[p+2][c], # absentee
+                    self.lines[p+3][c], # early voting
+                    self.lines[p+4][c]  # provisional
+                    ]
 
-            # Check if this precinct lacks information for this candidate. If so, skip it. First column is "Total"
-            if all([cell.strip() == '' for cell in precinct_votes[1:]]):
-                continue
-
-            for (c,candidate) in candidates:
-                # Add a tuple of (candidate name, precinct name, #votes received)
-                self.Results.append((candidate, precinct, int(precinct_votes[c])))
+                # if thehre are no counts reported, skip this precinct+candidate
+                if all([count == '' for count in counts]):
+                    continue
+                
+                try:
+                    total = sum(map(int, counts))
+                except:
+                    print("Non-integer vote count value found for race '%s', precinct '%s', and candidate '%s'" % (self.Race, precinct, candidate))
+                    print("   Normal: %s" % counts[0])
+                    print("   Absentee: %s" % counts[1])
+                    print("   Early Voting: %s" % counts[2])
+                    print("   Provisional: %s" % counts[3])
+                    continue
+                self.Results.append((candidate, precinct, total))
  
 class ExcelConversion(object):
     def __init__(self, filename:str, delimiter:str=None):
@@ -77,7 +94,9 @@ class ExcelConversion(object):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
         """
         # Find the line with the race description
-        index = [i for i in range(len(self.lines)) if self.lines[i][0] == 'TURN OUT'][0]
+        # This 'cleaned' file puts the string "STATISTICS" into the second column, whereas a previous version put "TURN OUT" into the first
+        # https://www.dropbox.com/ow/msft/edit/personal/Utah/UtahData/Election_Results/Precinct%20level/2018%20GE%20SOVC/Cleaned%20Data/Adrienne%20%26%20Annika%20conversions/2018%20General%20Election%20-%20Beaver%20Precinct-Level%20Results(1).xlsx?hpt_click_ts=1555170822997
+        index = [i for i in range(len(self.lines)) if self.lines[i][1] == 'STATISTICS'][0]
         subset = self.lines[index:]
 
         # get the names and indexes of each race
@@ -90,7 +109,7 @@ class ExcelConversion(object):
             (current_index, current_name) = races[i]
             (next_index, next_name) = races[i + 1]
 
-            if current_name in ('TURN OUT', 'STRAIGHT PARTY'):
+            if current_name in ('STATISTICS', 'STRAIGHT PARTY'):
                 continue
 
             # slice the list[][] and create a RaceConversion
@@ -150,7 +169,7 @@ class ElectionDatabase(object):
 
 
 if __name__ == '__main__':
-    converter = ExcelConversion('beaver.2008.SOVC (1).tsv')
+    converter = ExcelConversion('2018 General Election - Box Elder Precinct-Level Results.tsv')
     converter.Parse()
 
     db = ElectionDatabase(r'C:\Users\adams\Source\Repos\T4DataEntry\T4DataEntry\bin\Debug\data.sqlite')
