@@ -172,6 +172,21 @@ if __name__ == '__main__':
     converter = ExcelConversion('2018 General Election - Box Elder Precinct-Level Results.tsv')
     converter.Parse()
 
+    print("Parsing completed")
+
+    print("Races and candidates discovered:")
+    for race in converter.Races:
+        print(" - " + race.Race)
+        for candidate in race.Candidates:
+            print("    - " + candidate)
+    print()
+
+    r = converter.Races[0]
+    print("Precincts discovered (from the first race, '%s'):" % r.Race)
+    for precinct in r.Precincts:
+        print("    " + precinct)
+    print()
+
     db = ElectionDatabase(r'C:\Users\adams\Source\Repos\T4DataEntry\T4DataEntry\bin\Debug\data.sqlite')
-    db.CommitParsedResults(converter, '2008 General Election')
+    db.CommitParsedResults(converter, '2018 General Election')
     
