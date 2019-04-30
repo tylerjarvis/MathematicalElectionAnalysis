@@ -11,6 +11,9 @@
     <OutputPath>.</OutputPath>
     <Name>Analysis</Name>
     <RootNamespace>Analysis</RootNamespace>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <CommandLineArguments>"2018 General Election - Beaver Precinct-Level Results - Format 2.csv" 2</CommandLineArguments>
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>

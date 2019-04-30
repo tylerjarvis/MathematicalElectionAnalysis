@@ -56,17 +56,15 @@ class RaceConversion(object):
         return precinct
 
     def Parse2(self):
-        # fields in the CSV that are guaranteed and in the same place for every race.
-        RegVoterIdx, TotalVotesIdx = 1, 2
-
         # First cell is the race, eg "US President"
         self.Race = self.lines[0][0]
         
         # Second line is empty
 
         # Get the candidate names. These are on the same line as 'Registered Voters', etc.
+        TotalVotesIdx = 2
         candidate_line = self.lines[2]
-        candidates = [ (i, candidate_line[i]) for i in range(RaceConversion.TotalVotesIdx + 1, len(candidate_line)) if candidate_line[i].strip() != '']
+        candidates = [ (i, candidate_line[i]) for i in range(TotalVotesIdx + 1, len(candidate_line)) if candidate_line[i].strip() != '']
         self.Candidates = [name for (i,name) in candidates]
 
         # Precinct names are listed in rows starting at index 4 and each take up five rows
@@ -363,20 +361,39 @@ class ElectionDatabase(object):
 
                 self.InsertResults(candidateId, precinctId, raceId, votes)
 
-
+def Usage(arg0):
+    print("Usage: %s <filename.csv> <format>")
+    print("Format must be one of: 1, 2, 3, 4")
 
 if __name__ == '__main__':
     #filename = '2018 General Election - Box Elder Precinct-Level Results.tsv' # format 2
-    filename1 = '2018 General Election - Cache Precinct-Level Results - Format 1.csv'
+    #filename1 = '2018 General Election - Cache Precinct-Level Results - Format 1.csv'
     #filename2 = '2018 General Election - Beaver Precinct-Level Results - Format 2.csv'
     #filename3 = '2018 General Election - Grand Precinct-Level Results - Format 3.csv'
     #filename4 = '2018 General Election - Salt Lake Precinct-Level Results - Sheet 5 - Format 4.csv'
 
-    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
-        filename = sys.argv[1]
+    if len(sys.argv) <= 2:
+       Usage(sys.argv[0])
+       exit()
 
-    converter = ExcelConversion(filename1)
-    converter.Parse1()
+    filename, format = sys.argv[1:3]
+
+    if not os.path.exists(filename):
+        print("File '%s' doesn't exist" % filename)
+        Usage(sys.argv[0])
+        exit()
+
+    if format not in ['1', '2', '3', '4']:
+        print("Format '%s' is invalid" % format)
+        Usage(sys.argv[0])
+        exit()
+
+    converter = ExcelConversion(filename)
+
+    if format == '1': converter.Parse1()
+    elif format == '2': converter.Parse2()
+    elif format == '3': converter.Parse3()
+    elif format == '4': converter.Parse4()
 
     print("Parsing completed")
     converter.Dump()
