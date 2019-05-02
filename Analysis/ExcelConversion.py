@@ -315,16 +315,26 @@ class ExcelConversion(object):
         print()
 
 class ElectionDatabase(object):
+    """
+    This class is meant to be an interface to the SQLite database created by the T4DataEntry[1]-created database
+    for election data[2].
+    
+    [1] https://github.com/aeshirey/T4DataEntry
+    [2] https://github.com/tylerjarvis/MathematicalElectionAnalysis/tree/master/data%20entry
+    """
     def __init__(self, filename):
         self.db = sqlite3.connect(filename)
 
-    def GetCandidateId(self, name): return self.GetId('Candidate', 'Name', name)
-    def GetDistrictId(self, desc): return self.GetId('District', 'Name', desc)
-    def GetElectionId(self, desc): return self.GetId('Election', 'Description', desc)
-    def GetPrecinctnId(self, name): return self.GetId('Precinct', 'Name', name)
-    def GetRaceId(self, desc): return self.GetId('Race', 'Description', desc)
+    def GetCandidateId(self, name): return self.__getId('Candidate', 'Name', name)
+    def GetDistrictId(self, desc): return self.__getId('District', 'Name', desc)
+    def GetElectionId(self, desc): return self.__getId('Election', 'Description', desc)
+    def GetPrecinctnId(self, name): return self.__getId('Precinct', 'Name', name)
+    def GetRaceId(self, desc): return self.__getId('Race', 'Description', desc)
 
-    def GetId(self, table, column, value):
+    def __getId(self, table, column, value):
+        """
+        Internal method for INSERT/SELECTing values
+        """
         c = self.db.cursor()
         q = 'SELECT %sId FROM %s WHERE %s = ?' % (table, table, column)
         c.execute(q, (value,))
@@ -340,7 +350,28 @@ class ElectionDatabase(object):
         self.db.commit()
         return id
 
+    def DumpDB(self):
+        tables = ('Candidate', 'District', 'Election', 'Precinct', 'Race')
+        c = self.db.cursor()
+        for table in tables:
+            print(table.upper() + ":")
+
+            # get table schema
+            c.execute("pragma table_info('%s')" % table)
+            col_names = [name for (columnid, name, sqltype, notnull, defaultvalue, pk) in c.fetchall()]
+            print(' | '.join(col_names))
+
+            c.execute("SELECT * FROM %s" % table)
+            for row in c.fetchall():
+                print(row)
+            print("")
+
+        print("Database dump complete")
+
     def InsertResults(self, candidateId, precinctId, raceId, votes):
+        """
+        Insert a row into the 'Results' table (which tracks the (Candidate, Precinct, Race) and votes for that tuple)
+        """
         c = self.db.cursor()
         # Check if we have results for this 3-tuple
         c.execute("SELECT * FROM Results WHERE CandidateId = ? AND PrecinctId = ? AND RaceId = ?", (candidateId, precinctId, raceId))
@@ -361,31 +392,39 @@ class ElectionDatabase(object):
 
                 self.InsertResults(candidateId, precinctId, raceId, votes)
 
+            # commit after each race
+            self.db.commit()
+
 def Usage(arg0):
-    print("Usage: %s <filename.csv> <format>")
+    print("Usage: %s <filename.csv> <format> [-sql]")
     print("Format must be one of: 1, 2, 3, 4")
+    print("If '-sql' is passed, INSERT statements will be output. Otherwise, debugging output.")
 
 if __name__ == '__main__':
-    #filename = '2018 General Election - Box Elder Precinct-Level Results.tsv' # format 2
-    #filename1 = '2018 General Election - Cache Precinct-Level Results - Format 1.csv'
-    #filename2 = '2018 General Election - Beaver Precinct-Level Results - Format 2.csv'
-    #filename3 = '2018 General Election - Grand Precinct-Level Results - Format 3.csv'
-    #filename4 = '2018 General Election - Salt Lake Precinct-Level Results - Sheet 5 - Format 4.csv'
-
     if len(sys.argv) <= 2:
        Usage(sys.argv[0])
        exit()
 
-    filename, format = sys.argv[1:3]
+    DATABASE = 'election.sqlite'
+    ELECTION_NAME = 'General Election'
+
+    sql = any([arg == '-sql' for arg in sys.argv])
+    args = [arg for arg in sys.argv if arg != '-arg']
+
+    if sql and not os.path.exists(DATABASE):
+        print("Database '%s' was expected but not found. This is necessary for inserting records" % DATABASE)
+        exit()
+
+    filename, format = args[1:3]
 
     if not os.path.exists(filename):
         print("File '%s' doesn't exist" % filename)
-        Usage(sys.argv[0])
+        Usage(args[0])
         exit()
 
     if format not in ['1', '2', '3', '4']:
         print("Format '%s' is invalid" % format)
-        Usage(sys.argv[0])
+        Usage(args[0])
         exit()
 
     converter = ExcelConversion(filename)
@@ -395,5 +434,11 @@ if __name__ == '__main__':
     elif format == '3': converter.Parse3()
     elif format == '4': converter.Parse4()
 
-    print("Parsing completed")
-    converter.Dump()
+    if sql:
+        ed = ElectionDatabase(DATABASE)
+        ed.DumpDB()
+        ed.CommitParsedResults(converter, ELECTION_NAME)
+        ed.DumpDB()
+    else:
+        print("Parsing completed")
+        converter.Dump()
