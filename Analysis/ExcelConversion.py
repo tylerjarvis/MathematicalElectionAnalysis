@@ -96,6 +96,36 @@ class RaceConversion(object):
         # First cell is the race, eg "US President"
         self.Race = self.lines[0][0]
         
+        # candidate names are on the third line after 'Precinct', 'Votes Cast'
+        candidate_line = self.lines[2]
+        candidates = [ (i, candidate_line[i]) for i in range(2, len(candidate_line)) if candidate_line[i].strip() != '']
+        self.Candidates = [name for (i,name) in candidates]
+
+        # Precinct names are listed in rows starting at index 4 and each take
+        # up five rows
+
+        # Read from the fourth line to the last precinct; this format includes
+        # a Total, which is unnecessary
+        precincts = [(i, self.lines[i][0]) for i in range(3, len(self.lines) - 1) if self.lines[i][0].strip() not in ('', 'Totals')]
+        self.Precincts = [name for (i,name) in precincts]
+
+
+        for (p,precinct) in precincts:
+            for (c, candidate) in candidates:
+                # Non-Salt Lake format 4 includes the votes below the candidate
+                total = self.lines[p][c]
+                
+                try:
+                    total = int(total)
+                except:
+                    print("Non-integer vote count value ('%s') found for race '%s', precinct '%s', and candidate '%s'" % (total, self.Race, precinct, candidate))
+                    continue
+                self.Results.append((candidate, precinct, total))
+
+    def Parse4SaltLake(self):
+        # First cell is the race, eg "US President"
+        self.Race = self.lines[0][0]
+        
         # Second line is candidate names
         candidate_line = self.lines[1]
         candidates = [ (i, candidate_line[i]) for i in range(len(candidate_line)) if candidate_line[i].strip() != '']
@@ -185,9 +215,6 @@ class ExcelConversion(object):
             
             if subset[0][0] == 'STATISTICS':
                 subset = subset[2:]
-                #if subset[2][2] != 'TOTAL':
-                #    print("Expected 'TOTAL'; got '%s'" % subset[2][2].strip())
-                #    return
             else:
                 # subset[1][0] should be 'Vote for 1'
                 subset = subset[3:]
@@ -238,8 +265,6 @@ class ExcelConversion(object):
             consolidated.append(combined)
 
         self.Races = consolidated
-
-
 
     def Parse2(self):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
@@ -294,7 +319,14 @@ class ExcelConversion(object):
             r = RaceConversion(subset)
             r.Parse3(precincts)
             self.Races.append(r)
-
+            
+    def Parse4SaltLake(self):
+        """Format 4 is one race per sheet, so the ExcelConversion simply hands off parsing to Race
+        """
+        race = RaceConversion(self.lines)
+        race.Parse4SaltLake()
+        self.Races = [race]
+        
     def Parse4(self):
         """Format 4 is one race per sheet, so the ExcelConversion simply hands off parsing to Race
         """
@@ -434,6 +466,8 @@ if __name__ == '__main__':
     if format == '1': converter.Parse1()
     elif format == '2': converter.Parse2()
     elif format == '3': converter.Parse3()
+    # format 3 is different for Salt Lake county
+    elif format == '4' and 'Salt Lake' in filename: converter.Parse4SaltLake()
     elif format == '4': converter.Parse4()
 
     if sql:
