@@ -182,6 +182,10 @@ class ExcelConversion(object):
             values = [col for col in cols if col.strip() != '']
             
             if len(values) < 2: return None
+
+            # these values also signal the end of a race
+            if values[0] in ['Total Votes Cast', 'Contest Totals']: return None
+
             if values[0] == 'Voter Turnout':
                 pct = float(values[1].replace('%', ''))
                 return values[0], pct
@@ -201,6 +205,7 @@ class ExcelConversion(object):
                
         subset = self.lines[:]
         precinct = ''
+
         while len(subset) > 0:
             if subset[0][0] == 'Summary Results Report':
                 # skip the next three lines
@@ -209,16 +214,20 @@ class ExcelConversion(object):
                 # and the precinct follows
                 precinct, subset = subset[0][0], subset[1:]
 
+            if subset[0][0] == 'STATISTICS':
+                subset = subset[5:]
+
             race = RaceConversion([])
+
+            # read the race name, remove from the set of lines to parse
             race.Race = subset[0][0]
+            subset = subset[1:]
 
             
-            if subset[0][0] == 'STATISTICS':
-                subset = subset[2:]
-            else:
-                # subset[1][0] should be 'Vote for 1'
-                subset = subset[3:]
+            # subset[1][0] should be 'Vote for 1' followed by "total, vote %, mail, provisional"
+            subset = subset[2:]
                            
+            # now candidates
             for i in range(len(subset)):
                 line = subset[i]
 
@@ -228,14 +237,14 @@ class ExcelConversion(object):
                     subset = subset[i:]
                     break
 
-                race.lines.append(nc)
-
+            # trim any trailing lines
+            while len(subset) > 0 and subset[0][0] in ['Total Votes Cast', 'Contest Totals']:
+                subset.pop(0)
                 
             if race.Race not in ['STATISTICS', 'STRAIGHT PARTY']:
                 race.Parse1(precinct)
                 self.Races.append(race)
 
-        #return
 
 
 
@@ -435,6 +444,10 @@ def Usage(arg0):
     print("If '-sql' is passed, INSERT statements will be output. Otherwise, debugging output.")
 
 if __name__ == '__main__':
+
+    sys.argv = ['', r'2018 General Election - Cache Precinct-Level Results - Format 1.csv', '1']
+    #sys.argv += [r'2018 General Election - Wasatch Precinct-Level Results.csv', '1']
+
     if len(sys.argv) <= 2:
        Usage(sys.argv[0])
        exit()
@@ -443,7 +456,7 @@ if __name__ == '__main__':
     ELECTION_NAME = 'General Election'
 
     sql = any([arg == '-sql' for arg in sys.argv])
-    args = [arg for arg in sys.argv if arg != '-arg']
+    args = [arg for arg in sys.argv if arg != '-sql']
 
     if sql and not os.path.exists(DATABASE):
         print("Database '%s' was expected but not found. This is necessary for inserting records" % DATABASE)
