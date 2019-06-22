@@ -36,19 +36,30 @@ class PrecinctConversion(object):
         if DEBUG_LOGGING: print(f"Parsing precinct '{self.Precinct}'")
 
         # remove the heading up to and including the number of registered voters, ballots cast
-        subset = self.lines[9:]
+        # typically, this is 9 rows, but sometimes it's 8
+        if self.lines[8][0].startswith("Registered Voters"):
+           index = 9
+        else:
+           index = 8
+        subset = self.lines[index:]
 
         def parse_races(lines):
             # remove empty lines at the beginning and end
             while is_blank_line(lines[0]): lines.pop(0)
             while is_blank_line(lines[-1]): lines.pop()
 
+            if lines[0][0].startswith("Registered Voters") or lines[0][0].startswith("Num. Report Precinct"):
+                lines.pop(0)
+                
             endings = [0] + [i+1 for (i,line) in enumerate(lines) if is_blank_line(line)] + [None]
 
             for start, end in zip(endings, endings[1:]):
                 race_lines = lines[start:end]
 
                 race = race_lines[0][0]
+
+                # often, the first cell is blank but the second has the race name
+                if race == '': race = race_lines[0][1]
 
                 if race == 'STRAIGHT PARTY':
                     continue
@@ -77,7 +88,6 @@ class PrecinctConversion(object):
                         #raise
 
                 if DEBUG_LOGGING: print(f"    Parsed race '{race}'")
-                        
                 
         # parse the left column
         left = [line[:5] for line in subset]
@@ -277,8 +287,6 @@ class ExcelConversion(object):
             if candidate not in r.Candidates:
                 r.Candidates.append(candidate)
 
-
-
     def Parse1(self):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
         """
@@ -462,7 +470,8 @@ class ExcelConversion(object):
 
             self.AddPrecinctConversions(precinct)
 
-
+    def Parse6(self):
+        pass
 
     def Dump(self):
         print("Races and candidates:")
