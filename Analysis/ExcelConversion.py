@@ -21,6 +21,29 @@ class PrecinctConversion(object):
         self.Candidates : list[str] = []
         self.Results : List[tuple(str,str,int)] = [] # (candidate, race, total)
 
+    def Parse1A(self, lines):
+        # race should be the first line
+        race = lines[0][0]
+        self.Races.append(race)
+
+        # candidates/choices should be the fourth through the end
+        for line in lines[3:]:
+            candidate, blank, votes, *rest = line
+
+            if candidate == 'Summary Results Report':
+                # done processing candidates
+                break
+
+            try:
+                votesInt = int(votes)
+            except:
+                raise ValueError("Failed to parse vote string (%s) for candidate '%s' in race '%s'" % (votes, candidate, race))
+
+            self.Results.append((candidate, race, votesInt))
+
+            if candidate not in self.Candidates:
+                self.Candidates.append(candidate)
+
     def Parse5(self):
         # precinct name on the sixth row
         try:
@@ -119,7 +142,7 @@ class RaceConversion(object):
 
         for name, count in self.lines:
             self.Results += name, precinct, count
-
+            
     def Parse2(self):
         # First cell is the race, eg "US President"
         self.Race = self.lines[0][0]
@@ -387,6 +410,45 @@ class ExcelConversion(object):
 
         self.Races = consolidated
 
+    def Parse1A(self):
+        # Some of the 1A files seem to have empty lines. probably CR/LF issue. start by removing all empty lines
+        self.lines = [line for line in self.lines if any([col.strip() != '' for col in line])]
+        
+        # Find all indexes of 'TOTAL' and go back two
+        # After 'STATISTICS', it's "^,TOTAL,+", but after "Vote For ", it's "^,,TOTAL,+"
+        totals = [i - 2 for (i, line) in enumerate(self.lines) if 'TOTAL' in line[1:3]] + [None]
+        num_totals = len(totals)
+
+        precinctName, precinct = None, None
+        all_precincts = []
+
+        for lineNo, nextTotal in zip(totals, totals[1:]):
+            # a 'TOTAL' line can either be preceded by STATISTICS (in which case we want to grab the precinct name from two lines before TOTAL):
+            if self.lines[lineNo + 1][0] == 'STATISTICS':
+                new_precinct = self.lines[lineNo - 2][0]
+                if new_precinct != precinctName:
+                    precinctName = new_precinct
+
+                    precinct = PrecinctConversion([])
+                    all_precincts.append(precinct)
+                    precinct.Precinct = new_precinct
+
+            # or TOTAL is preceded by 'Vote For 1', which is a race
+            elif self.lines[lineNo + 1][0] == 'Vote For 1':
+                raceLines = self.lines[lineNo:nextTotal]
+                try:
+                    precinct.Parse1A(raceLines)
+
+                except ValueError as e:
+                    print("Encountered error around line %d" % lineNo)
+                    print(e)
+
+            else:
+                raise ValueError("Unhandled value precedes TOTAL on line %d" % lineNo)
+
+        for precinct in all_precincts:
+            self.AddPrecinctConversions(precinct)
+
     def Parse2(self):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
         """
@@ -570,12 +632,12 @@ class ElectionDatabase(object):
 
 def Usage(arg0):
     print("Usage: %s <filename.csv> <format> [-sql]")
-    print("Format must be one of: 1, 2, 3, 4")
+    print("Format must be one of: 1, 1A, 1B, 2, 3, 4")
     print("If '-sql' is passed, INSERT statements will be output. Otherwise, debugging output.")
 
 if __name__ == '__main__':
 
-    sys.argv = ['', r'C:\Users\adams\Downloads\Format 5 - Box Elder.2008.SOVC (2).tsv', '5']
+    #sys.argv = ['', r'C:\Users\adams\Downloads\Format 5 - Box Elder.2008.SOVC (2).tsv', '5']
     #sys.argv += [r'2018 General Election - Wasatch Precinct-Level Results.csv', '1']
 
     if len(sys.argv) <= 2:
@@ -599,7 +661,7 @@ if __name__ == '__main__':
         Usage(args[0])
         exit()
 
-    if format not in ['1', '2', '3', '4', '5', '6']:
+    if format.upper() not in ['1', '1A', '1B', '2', '3', '4', '5', '6']:
         print("Format '%s' is invalid" % format)
         Usage(args[0])
         exit()
@@ -608,6 +670,8 @@ if __name__ == '__main__':
 
     try:
         if format == '1': converter.Parse1()
+        elif format.upper() == '1A': converter.Parse1A()
+        elif format.upper() == '1B': converter.Parse1B()
         elif format == '2': converter.Parse2()
         elif format == '3': converter.Parse3()
         # format 3 is different for Salt Lake county
@@ -624,5 +688,7 @@ if __name__ == '__main__':
             print("Parsing completed")
             converter.Dump()
 
+    except BaseException as e:
+        print("Exception: %s" % e)
     except:
         print("Parsing halted")

@@ -12,7 +12,7 @@
     <Name>Analysis</Name>
     <RootNamespace>Analysis</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>"2018 General Election - San Juan Precinct-Level Results - Commission #2.tsv" 4</CommandLineArguments>
+    <CommandLineArguments>"2018 General Election - Box Elder Precinct-Level Results 1A.csv" 1A</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
