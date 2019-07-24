@@ -21,16 +21,19 @@ class PrecinctConversion(object):
         self.Candidates : list[str] = []
         self.Results : List[tuple(str,str,int)] = [] # (candidate, race, total)
 
-    def Parse1A(self, lines):
+    def Parse1AB(self, lines, type):
         # race should be the first line
         race = lines[0][0]
         self.Races.append(race)
 
         # candidates/choices should be the fourth through the end
         for line in lines[3:]:
-            candidate, blank, votes, *rest = line
+            if type == 'A':
+                candidate, blank, votes, *rest = line
+            elif type == 'B':
+                candidate, votes, *rest = line
 
-            if candidate == 'Summary Results Report':
+            if candidate in ['Summary Results Report', 'Total Votes Cast']:
                 # done processing candidates
                 break
 
@@ -410,8 +413,15 @@ class ExcelConversion(object):
 
         self.Races = consolidated
 
-    def Parse1A(self):
+    def Parse1AB(self, type):
+        """1A and 1B are similar, except with 1B:
+        *   "TOTAL" seems guaranteed to be in the second column
+        *   Vote counts are in the second column, not third like in 1A
+        *   Precinct names are formatted differently (eg, "AL11 Altamont - County", "AL12 Altamont - City"), but this won't be handled differently
+        """
+
         # Some of the 1A files seem to have empty lines. probably CR/LF issue. start by removing all empty lines
+        # This doesn't seem as big a deal with 1B, but it won't hurt.
         self.lines = [line for line in self.lines if any([col.strip() != '' for col in line])]
         
         # Find all indexes of 'TOTAL' and go back two
@@ -437,7 +447,7 @@ class ExcelConversion(object):
             elif self.lines[lineNo + 1][0] == 'Vote For 1':
                 raceLines = self.lines[lineNo:nextTotal]
                 try:
-                    precinct.Parse1A(raceLines)
+                    precinct.Parse1AB(raceLines, type)
 
                 except ValueError as e:
                     print("Encountered error around line %d" % lineNo)
@@ -448,6 +458,7 @@ class ExcelConversion(object):
 
         for precinct in all_precincts:
             self.AddPrecinctConversions(precinct)
+
 
     def Parse2(self):
         """Split up the parsed CSV into child lists and hand it off to RaceConversion
@@ -670,8 +681,8 @@ if __name__ == '__main__':
 
     try:
         if format == '1': converter.Parse1()
-        elif format.upper() == '1A': converter.Parse1A()
-        elif format.upper() == '1B': converter.Parse1B()
+        elif format.upper() == '1A': converter.Parse1AB(type='A')
+        elif format.upper() == '1B': converter.Parse1AB(type='B')
         elif format == '2': converter.Parse2()
         elif format == '3': converter.Parse3()
         # format 3 is different for Salt Lake county
