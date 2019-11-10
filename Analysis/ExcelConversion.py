@@ -50,18 +50,19 @@ class PrecinctConversion(object):
     def Parse5(self):
         # precinct name on the sixth row
         try:
-            self.Precinct =  re.match('Summary for (.+), All Counters, All Races', self.lines[5][0], re.IGNORECASE).group(1)
+            self.Precinct = re.match('Summary for (.+), All Counters, All Races', self.lines[5][0], re.IGNORECASE).group(1)
         except:
             summary_for = " ".join(self.lines[5]).rstrip()
             try:
-                self.Precinct =  re.match('Summary for (.+), All Counters, All Races', summary_for, re.IGNORECASE).group(1)
+                self.Precinct = re.match('Summary for (.+), All Counters, All Races', summary_for, re.IGNORECASE).group(1)
             except:
                 print("Failed to parse precinct name from line: %s" % summary_for)
                 print("Expected contents: 'Summary for <precinct name>, All Counters, All Races'")
                 return
         if DEBUG_LOGGING: print(f"Parsing precinct '{self.Precinct}'")
 
-        # remove the heading up to and including the number of registered voters, ballots cast
+        # remove the heading up to and including the number of registered
+        # voters, ballots cast
         # typically, this is 9 rows, but sometimes it's 8
         if self.lines[8][0].startswith("Registered Voters"):
            index = 9
@@ -77,14 +78,15 @@ class PrecinctConversion(object):
             if lines[0][0].startswith("Registered Voters") or lines[0][0].startswith("Num. Report Precinct"):
                 lines.pop(0)
                 
-            endings = [0] + [i+1 for (i,line) in enumerate(lines) if is_blank_line(line)] + [None]
+            endings = [0] + [i + 1 for (i,line) in enumerate(lines) if is_blank_line(line)] + [None]
 
             for start, end in zip(endings, endings[1:]):
                 race_lines = lines[start:end]
 
                 race = race_lines[0][0]
 
-                # often, the first cell is blank but the second has the race name
+                # often, the first cell is blank but the second has the race
+                # name
                 if race == '': race = race_lines[0][1]
 
                 if race == 'STRAIGHT PARTY':
@@ -96,7 +98,8 @@ class PrecinctConversion(object):
 
 
                 race_lines = race_lines[2:] # remove race name, 'Total' line
-                race_lines = race_lines[4:] # remove 'Number of Precincts', 'Precincts Reporting', 'Times Counted', 'Total Votes'
+                race_lines = race_lines[4:] # remove 'Number of Precincts', 'Precincts Reporting', 'Times Counted', 'Total
+                                            # Votes'
                 race_lines = race_lines[:-1] # remove the end-of-race blank line
 
                 for (candidate, blank, party, total, percent) in race_lines:
@@ -123,6 +126,50 @@ class PrecinctConversion(object):
         right = [line[6:11] for line in subset]
         parse_races(right)
 
+    def Parse7(self):
+        """
+        Find the distance between each candidate
+        Figure out when race change and candidate change
+        """
+        vote_col = 5
+        cand_col = 4
+        race_col = 3
+        self.Precinct = self.lines[0][2]
+
+        # find U.S.  SENATE and first candidate
+        for i in range(len(self.lines)):
+            if self.lines[i][race_col] in ["RACE STATISTICS","STRAIGHT PARTY"] or self.lines[i][cand_col] in ["Number of Precincts for Race","Number of Precincts Reporting","Registered Voters"]:
+                continue
+            else:
+                initial_race = self.lines[i][race_col]
+                initial_can = self.lines[i][cand_col]
+                start = i
+                break
+        #find the distance between "total" lines
+        count = -1
+        for i in range(start,start + 6):
+            if initial_can == self.lines[i][cand_col]:
+                count+=1
+
+        race = initial_race
+        candidate = initial_can
+        i = start
+        while i < len(self.lines):
+            # find first candidate in race
+            if self.lines[i][race_col] in ["RACE STATISTICS","STRAIGHT PARTY"] or self.lines[i][cand_col] in ["Number of Precincts for Race","Number of Precincts Reporting","Registered Voters"]:
+                i+=1
+            else:
+                race = self.lines[i][race_col]
+                candidate = self.lines[i][cand_col]
+                self.Races.append(race)
+                self.Candidates.append(candidate)
+                if i + count < len(self.lines):
+                    total = int(self.lines[i + count][vote_col])
+                    i += (count + 1)
+                else:
+                    #Only when at the end of the precinct
+                    total = int(self.lines[i + count - 1][vote_col])
+                self.Results.append([candidate,race,total])
 
 
 
@@ -296,7 +343,7 @@ class ExcelConversion(object):
 
         self.Races : list[RaceConversion] = []
 
-    def AddPrecinctConversions(self, p : PrecinctConversion):
+    def AddPrecinctConversions(self, p: PrecinctConversion):
         for candidate, race, total in p.Results:
             # find or create a RaceConversion
             matching_race = [rc for rc in self.Races if rc.Race == race]
@@ -362,7 +409,8 @@ class ExcelConversion(object):
             subset = subset[1:]
 
             
-            # subset[1][0] should be 'Vote for 1' followed by "total, vote %, mail, provisional"
+            # subset[1][0] should be 'Vote for 1' followed by "total, vote %,
+            # mail, provisional"
             subset = subset[2:]
                            
             # now candidates
@@ -420,12 +468,14 @@ class ExcelConversion(object):
         *   Precinct names are formatted differently (eg, "AL11 Altamont - County", "AL12 Altamont - City"), but this won't be handled differently
         """
 
-        # Some of the 1A files seem to have empty lines. probably CR/LF issue. start by removing all empty lines
+        # Some of the 1A files seem to have empty lines.  probably CR/LF issue.
+        # start by removing all empty lines
         # This doesn't seem as big a deal with 1B, but it won't hurt.
         self.lines = [line for line in self.lines if any([col.strip() != '' for col in line])]
         
         # Find all indexes of 'TOTAL' and go back two
-        # After 'STATISTICS', it's "^,TOTAL,+", but after "Vote For ", it's "^,,TOTAL,+"
+        # After 'STATISTICS', it's "^,TOTAL,+", but after "Vote For ", it's
+        # "^,,TOTAL,+"
         totals = [i - 2 for (i, line) in enumerate(self.lines) if 'TOTAL' in line[1:3]] + [None]
         num_totals = len(totals)
 
@@ -433,7 +483,9 @@ class ExcelConversion(object):
         all_precincts = []
 
         for lineNo, nextTotal in zip(totals, totals[1:]):
-            # a 'TOTAL' line can either be preceded by STATISTICS (in which case we want to grab the precinct name from two lines before TOTAL):
+            # a 'TOTAL' line can either be preceded by STATISTICS (in which
+            # case we want to grab the precinct name from two lines before
+            # TOTAL):
             if self.lines[lineNo + 1][0] == 'STATISTICS':
                 new_precinct = self.lines[lineNo - 2][0]
                 if new_precinct != precinctName:
@@ -530,12 +582,14 @@ class ExcelConversion(object):
 
     # https://www.dropbox.com/home/Utah/UtahData/Election_Results/Precinct%20level/2008%20GE%20SOVC/Finished%20Conversions/Format%205
     def Parse5(self):
-        # Format 5 has two logical columns, each spanning five physical columns with one separating them.
-        # Row-wise, a file has multiple precincts and therefore has to first be split up by row, then columns can be concatenated
+        # Format 5 has two logical columns, each spanning five physical columns
+        # with one separating them.
+        # Row-wise, a file has multiple precincts and therefore has to first be
+        # split up by row, then columns can be concatenated
         page_breaks = [i for i in range(len(self.lines)) if self.lines[i][0] == 'Election Summary Report'] + [None]
 
-        for i in range(len(page_breaks)-1):
-            start, end = page_breaks[i:i+2]
+        for i in range(len(page_breaks) - 1):
+            start, end = page_breaks[i:i + 2]
             subset = self.lines[start:end]
 
             precinct = PrecinctConversion(subset)
@@ -545,6 +599,41 @@ class ExcelConversion(object):
 
     def Parse6(self):
         pass
+
+
+    def Parse7(self):
+        """
+        Splits when precinct changes and sends to precinct conversion
+        """
+        all_precincts = []
+        vote_col = self.lines[0].index("VOTES")
+        prec_col = self.lines[0].index("PRECINCT NAME")
+        race_col = self.lines[0].index("RACE")
+
+        i = 1
+        while i + 1 < len(self.lines):
+            precinct_name = self.lines[i][prec_col]
+            all_precincts.append(precinct_name)
+
+            start = i
+            while self.lines[i][prec_col] == precinct_name and i + 1 < len(self.lines):
+                i+=1
+
+
+            #Now we chop at end of precinct and send to precinct conversion
+
+            if i+1 < len(self.lines):
+                precinctlines = self.lines[start:i]
+            else:
+                #how we get the last row when we reach the end of the file
+                precinctlines = self.lines[start:i+1]
+
+            precinct = PrecinctConversion(precinctlines)
+            precinct.Parse7()
+            self.AddPrecinctConversions(precinct)
+
+
+
 
     def Dump(self):
         print("Races and candidates:")
@@ -648,8 +737,10 @@ def Usage(arg0):
 
 if __name__ == '__main__':
 
-    #sys.argv = ['', r'C:\Users\adams\Downloads\Format 5 - Box Elder.2008.SOVC (2).tsv', '5']
-    #sys.argv += [r'2018 General Election - Wasatch Precinct-Level Results.csv', '1']
+    #sys.argv = ['', r'C:\Users\adams\Downloads\Format 5 - Box Elder.2008.SOVC
+    #(2).tsv', '5']
+    #sys.argv += [r'2018 General Election - Wasatch Precinct-Level
+    #Results.csv', '1']
 
     if len(sys.argv) <= 2:
        Usage(sys.argv[0])
@@ -672,7 +763,7 @@ if __name__ == '__main__':
         Usage(args[0])
         exit()
 
-    if format.upper() not in ['1', '1A', '1B', '2', '3', '4', '5', '6']:
+    if format.upper() not in ['1', '1A', '1B', '2', '3', '4', '5', '6', '7']:
         print("Format '%s' is invalid" % format)
         Usage(args[0])
         exit()
@@ -685,10 +776,11 @@ if __name__ == '__main__':
         elif format.upper() == '1B': converter.Parse1AB(type='B')
         elif format == '2': converter.Parse2()
         elif format == '3': converter.Parse3()
-        # format 3 is different for Salt Lake county
+        # format 4 is different for Salt Lake county
         elif format == '4' and 'Salt Lake' in filename: converter.Parse4SaltLake()
         elif format == '4': converter.Parse4()
         elif format == '5': converter.Parse5()
+        elif format == '7': converter.Parse7()
 
         if sql:
             ed = ElectionDatabase(DATABASE)
