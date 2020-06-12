@@ -31,7 +31,7 @@ git clone https://username@github.com/username/forkname.git
 
 # Add the original repository as a remote.
 cd forkname
-git remote add upstream https://github.com/git@github.com:tylerjarvis/MathematicalElectionAnalysis.git
+git remote add upstream https://github.com/tylerjarvis/MathematicalElectionAnalysis.git
 ```
 Within your repository folder, `origin` refers to your fork repository and `upstream` refers to this source repository.
 
