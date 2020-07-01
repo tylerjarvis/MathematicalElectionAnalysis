@@ -221,17 +221,18 @@ def perform_dissolve_gdf(precincts, dissolve,
     Returns:
         merged (GeoDataFrame): a new merged GeoDataFrame
     """
+    assert len(new_column_names) == len(columns_to_keep)
 
     # Dissolve the one-neighbor precincts into their containers
-
     merged = precincts.dissolve(by=dissolve, aggfunc=['sum', 'first'])
 
-
+    # Drop superfluous columns
     for i, column in enumerate(merged.columns):
         if column not in columns_to_keep:
-            merged.columns[i] = new_column_names[i]
-        else:
             merged.drop(column, axis=1, inplace=True)
+
+    # Rename the remaining columns
+    merged.columns = new_column_names
 
     return merged
 
@@ -278,7 +279,7 @@ def perform_dissolve_graph(graph, dissolve, attributes_to_sum = ['area', 'SHAPE_
 
             # joining aggregation: VistaID, PrecinctID, SubPrecinc
 
-            for attributes in attributes_to_join:
+            for attribute in attributes_to_join:
                 new_graph.nodes[new_id][attribute] = ', '.join([str(graph.nodes[i][attribute]) for i in original_nodes])
             # ex. new_graph.nodes[new_id]['PrecinctID'] = ', '.join([str(graph.nodes[i]['PrecinctID']) for i in original_nodes])
 
@@ -435,7 +436,7 @@ def get_separators(graph):
 
     return ids, neighbor_ids, separations, merge
 
-def merge_multipolygons(graph, gdf):
+def merge_multipolygons(graph, gdf, preserve_ut_house=False):
     """
     This function attempts to create a merge which dissolves all multipolygons into polygons.
 
@@ -462,7 +463,14 @@ def merge_multipolygons(graph, gdf):
 
         # We don't want to merge it with a precinct in a different county
         # Only iterate through neighbors in the same county and congressional district
-        neighbors_in_county = [n for n in graph[mp].keys()
+        if preserve_ut_house:
+            neighbors_in_county = [n for n in graph[mp].keys()
+                               if graph.nodes[n]['CountyID'] == graph.nodes[mp]['CountyID']
+                               and graph.nodes[n]['US_Distric'] == graph.nodes[mp]['US_Distric']
+                               and graph.nodes[n]['UT_SEN'] == graph.nodes[mp]['UT_SEN']
+                               and graph.nodes[n]['UT_HOUSE'] == graph.nodes[mp]['UT_HOUSE']]
+        else:
+            neighbors_in_county = [n for n in graph[mp].keys()
                                if graph.nodes[n]['CountyID'] == graph.nodes[mp]['CountyID']
                                and graph.nodes[n]['US_Distric'] == graph.nodes[mp]['US_Distric']]
 
@@ -588,21 +596,52 @@ def merge_zero_population(graph, gdf):
     for node in graph.nodes:
         if graph.nodes[node]['POP100'] == 0:
             neighbors = [n for n in graph[node].keys()
-                               if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
-                               and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
-                               and graph.nodes[n]['POP100'] == 0]
+                    if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                     and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
+                    and graph.nodes[n]['UT_SEN'] == graph.nodes[node]['UT_SEN']
+                    and graph.nodes[n]['UT_HOUSE'] == graph.nodes[node]['UT_HOUSE']
+                    and graph.nodes[n]['POP100'] == 0]
+
 
             if len(neighbors) == 0:
                 # Try using zero-population neighbors
                 neighbors = [n for n in graph[node].keys()
-                                   if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
-                                   and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']]
+                if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
+                and graph.nodes[n]['UT_SEN'] == graph.nodes[node]['UT_SEN']
+                and graph.nodes[n]['UT_HOUSE'] == graph.nodes[node]['UT_HOUSE']]
+
+            if len(neighbors) == 0:
+                neighbors = [n for n in graph[node].keys()
+                if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
+                and graph.nodes[n]['UT_SEN'] == graph.nodes[node]['UT_SEN']
+                and graph.nodes[n]['POP100'] == 0]
+
+            if len(neighbors) == 0:
+                neighbors = [n for n in graph[node].keys()
+                if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
+                and graph.nodes[n]['UT_SEN'] == graph.nodes[node]['UT_SEN']]
+
+            if len(neighbors) == 0:
+                neighbors = [n for n in graph[node].keys()
+                if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']
+                and graph.nodes[n]['POP100'] == 0]
+
+            if len(neighbors) == 0:
+                neighbors = [n for n in graph[node].keys()
+                if graph.nodes[n]['CountyID'] == graph.nodes[node]['CountyID']
+                and graph.nodes[n]['US_Distric'] == graph.nodes[node]['US_Distric']]
 
             # Maximizing the shared perimeter of the precincts being merged is a decent way to pick good merges
             best = neighbors[np.argmax([graph[node][n]['shared_perim'] for n in neighbors])]
             merges.add(set([node, best]))
             if node == best:
                 print('!')
+
+
 
 
     return merges
