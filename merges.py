@@ -436,13 +436,18 @@ def get_separators(graph):
 
     return ids, neighbor_ids, separations, merge
 
-def merge_multipolygons(graph, gdf, preserve_ut_house=False):
+def highlight_discontiguities(graph, gdf, preserve=['CountyID', 'US_Distric', 'UT_SEN', 'UT_HOUSE']):
+
+
+def merge_multipolygons(graph, gdf, preserve=['CountyID', 'US_Distric', 'UT_SEN', 'UT_HOUSE']):
     """
     This function attempts to create a merge which dissolves all multipolygons into polygons.
 
     Parameters:
         graph (nx.Graph): an adjacency graph for the precincts
         gdf (GeoDataFrame): a gdf of the precinct geometries
+        preserve (list): a list of parameters in the graph that must be
+        preserved (i.e. precincts selected for merging must be the same in these parameters)
 
     Returns:
         merge (Merge): a Merge object containing the proposed merges
@@ -463,16 +468,7 @@ def merge_multipolygons(graph, gdf, preserve_ut_house=False):
 
         # We don't want to merge it with a precinct in a different county
         # Only iterate through neighbors in the same county and congressional district
-        if preserve_ut_house:
-            neighbors_in_county = [n for n in graph[mp].keys()
-                               if graph.nodes[n]['CountyID'] == graph.nodes[mp]['CountyID']
-                               and graph.nodes[n]['US_Distric'] == graph.nodes[mp]['US_Distric']
-                               and graph.nodes[n]['UT_SEN'] == graph.nodes[mp]['UT_SEN']
-                               and graph.nodes[n]['UT_HOUSE'] == graph.nodes[mp]['UT_HOUSE']]
-        else:
-            neighbors_in_county = [n for n in graph[mp].keys()
-                               if graph.nodes[n]['CountyID'] == graph.nodes[mp]['CountyID']
-                               and graph.nodes[n]['US_Distric'] == graph.nodes[mp]['US_Distric']]
+        neighbors_in_county = [n for n in graph[mp].keys() if all([graph.nodes[n][attr] == graph.nodes[mp][attr] for attr in preserve])]
 
         # Determine whether any of its immediate neighbors are multipolygons
         single_mp = True # store it in this flag
@@ -548,8 +544,6 @@ def merge_multipolygons(graph, gdf, preserve_ut_house=False):
     for subset in merges.merges:
         if type(unary_union([gdf.iloc[i]['geometry'] for i in subset])) != Polygon:
             unfinished.append(subset)
-
-
 
     for subset in unfinished:
 
