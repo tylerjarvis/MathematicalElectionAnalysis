@@ -225,11 +225,9 @@ class MetropolisHastings:
             score (float): the calculated fitness score (lower is better)
         """
         # Extract the data
-        pops = np.array(partition['population'].values())
+        mm = np.array(list(partition['population'].values()))
 
-        # Calculate the ideal population
-        if self.ideal_pop is None:
-            self.ideal_pop = np.mean(mm)
+        self.ideal_pop = np.mean(mm)
 
         # Calculate the max-min score
         if mode == "max-min":

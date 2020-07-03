@@ -1,6 +1,6 @@
 # Import necessary packages
-from gerrychain import (GeographicPartition, Partition, Graph, MarkovChain,
-                        proposals, updaters, constraints, accept, Election, grid)
+from chain import MarkovChain
+from gerrychain import (GeographicPartition, Partition, Graph, proposals, updaters, constraints, accept, Election, grid)
 from gerrychain.metrics import mean_median, partisan_bias, polsby_popper, efficiency_gap, partisan_gini
 import pandas as pd
 import numpy as np
@@ -11,7 +11,9 @@ import time
 from functools import partial
 
 # Import necessary tools from gerrymandering_tools.py
-from gerrymandering_tools import *
+from metropolis_hastings import *
+from partisan_dislocation import *
+from counties import *
 
 # Get correct input -----------------------------------------------------------
 class Chain:
@@ -46,7 +48,7 @@ class Chain:
                     'districts': 'US_Distric',
                     'compactness_ratio': 1.25,
                     'population_wiggle': 0.01,
-                    'weights': np.array([0., 0.5, 100., 0., 0.]),
+                    'weights': {'cut_edges': 0.5, 'pop_mattingly': 100},
                     'beta': 1,
                     'population_filename': 'populations_mp_sp.pkl',
                     'pe_gov_filename': 'partisan_environments_mp_sp_G.pkl',
@@ -57,10 +59,10 @@ class Chain:
                     'partisan_estimators': ['SEN10', 'G10', 'COMB10'],
                     'three_penalty': 1000,
                     'recom_epsilon': 0.02,
-                    'recom_node_repeats': 2
+                    'recom_node_repeats': 2,
+                    'election': 'SEN10',
+                    'custom': lambda p: True
                     }
-
-        uniform_weights = np.array([0., 0., 0., 0., 0.])
 
         # Check kind parameter
         assert kind in allowable_kinds
@@ -127,7 +129,7 @@ class Chain:
             population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
 
             # Construct our Markov Chain
-            chain = MarkovChain(proposal = proposals.propose_random_flip,
+            self.chain = MarkovChain(proposal = proposals.propose_random_flip,
                                 constraints=[constraints.single_flip_contiguous, compactness_bound, population_constraint],
                                 accept=accept.always_accept,
                                 initial_state=initial_partition,
@@ -136,10 +138,10 @@ class Chain:
         elif kind == 'flip-mh':
 
             # Construct our acceptance function
-            a = CustomAccept(self.params['weights'], partisan_environments=self.params['pe_comb_filename'], populations=self.params['population_filename'])
+            a = MetropolisHastings(self.params['weights'], self.params['beta'], election=self.params['election'], custom=self.params['custom'], environments=self.params['pe_comb_filename'], populations=self.params['population_filename'])
 
             # Construct our Markov Chain
-            chain = MarkovChain(proposal = proposals.propose_random_flip,
+            self.chain = MarkovChain(proposal = proposals.propose_random_flip,
                                 constraints=[constraints.single_flip_contiguous],
                                 accept=a,
                                 initial_state=initial_partition,
@@ -153,7 +155,7 @@ class Chain:
             population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
 
             # Construct our Markov Chain
-            chain = MarkovChain(proposal = recom_proposal,
+            self.chain = MarkovChain(proposal = recom_proposal,
                                 constraints=[constraints.single_flip_contiguous, compactness_bound, population_constraint],
                                 accept=accept.always_accept,
                                 initial_state=initial_partition,
@@ -162,10 +164,10 @@ class Chain:
         elif kind == 'recom-mh':
 
             # Construct our acceptance function
-            a = CustomAccept(self.params['weights'], partisan_environments=self.params['pe_comb_filename'], populations=populations)
+            a = MetropolisHastings(self.params['weights'], self.params['beta'], election=self.params['election'], custom=self.params['custom'], environments=self.params['pe_comb_filename'], populations=self.params['population_filename'])
 
             # Construct our Markov Chain
-            chain = MarkovChain(proposal = recom_proposal,
+            self.chain = MarkovChain(proposal = recom_proposal,
                                 constraints=[constraints.single_flip_contiguous],
                                 accept=a,
                                 initial_state=initial_partition,
@@ -192,7 +194,7 @@ class Chain:
         stored_assignments = pd.DataFrame(0, columns=range(len(graph)), index=range(int(iters/self.params['storage_ratio'])-1))
 
         # Iterate through the Markov Chain and store the data in a pd.DataFrame
-        for partition in tqdm(chain):
+        for partition in tqdm(self.chain):
             counter += 1
 
             # Non partisan summary metrics: len 21
@@ -237,14 +239,17 @@ class Chain:
         types.update({label: np.float64 for label in district_labels})
         types.update({label: np.uint32 for label in ['POP'+str(num) for num in range(1, m+1)]})
 
-        data = data.astype(types)
+        self.data = data.astype(types)
 
-        stored_assignments = stored_assignments.astype(np.uint8)
+        self.stored_assignments = stored_assignments.astype(np.uint8)
 
         # Save data and backup
         with pd.HDFStore(str(self.id)+'.h5') as store:
-            store['data'] = data.copy()
-            store['stored_assignments'] = stored_assignments.copy()
+            store['data'] = self.data.copy()
+            store['stored_assignments'] = self.stored_assignments.copy()
+
+
+        self.params['custom'] = 'Custom Acceptance Function'
 
         # Log chain run
         try:

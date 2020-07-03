@@ -1,4 +1,4 @@
-from .constraints import Validator
+from gerrychain.constraints import Validator
 
 
 class MarkovChain:
@@ -56,6 +56,7 @@ class MarkovChain:
     def __iter__(self):
         self.counter = 0
         self.accepted = 0 # Change made by jwmurri
+        self.attempted = 0 # Change made by jwmurri
         self.state = self.initial_state
         return self
 
@@ -65,7 +66,10 @@ class MarkovChain:
             return self.state
 
         while self.counter < self.total_steps:
+
             proposed_next_state = self.proposal(self.state)
+            self.attempted += 1 # Change made by jwmurri
+
             # Erase the parent of the parent, to avoid memory leak
             self.state.parent = None
 
