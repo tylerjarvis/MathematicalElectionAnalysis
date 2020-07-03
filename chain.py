@@ -61,6 +61,8 @@ class MarkovChain:
         return self
 
     def __next__(self):
+        self.attempted += 1 # Change made by jwmurri
+
         if self.counter == 0:
             self.counter += 1
             return self.state
@@ -68,7 +70,6 @@ class MarkovChain:
         while self.counter < self.total_steps:
 
             proposed_next_state = self.proposal(self.state)
-            self.attempted += 1 # Change made by jwmurri
 
             # Erase the parent of the parent, to avoid memory leak
             self.state.parent = None

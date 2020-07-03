@@ -1,5 +1,5 @@
 # Import necessary packages
-from chain import MarkovChain
+from chain import MarkovChain as MC2
 from gerrychain import (GeographicPartition, Partition, Graph, proposals, updaters, constraints, accept, Election, grid)
 from gerrychain.metrics import mean_median, partisan_bias, polsby_popper, efficiency_gap, partisan_gini
 import pandas as pd
@@ -9,6 +9,7 @@ import pickle
 import json
 import time
 from functools import partial
+import networkx as nx
 
 # Import necessary tools from gerrymandering_tools.py
 from metropolis_hastings import *
@@ -92,14 +93,18 @@ class Chain:
                        'assignment_array': AssignmentArray()
                       }
 
-        # Define our initial partition
-        initial_partition = GeographicPartition(graph, self.params['districts'], my_updaters)
         if self.params['starting_assignment'] != 'current_plan':
+            self.params['districts'] = 'NEW'
+
             if type(self.params['starting_assignment']) != np.array:
-                initial_partition.assignment = self.params['starting_assignment']
+                assignment = self.params['starting_assignment']
             else:
                 a = self.params['starting_assignment']
-                initial_partition.assignment = {i: a[i] for i in range(len(a))}
+                assignment = {i: a[i] for i in range(len(a))}
+            nx.set_node_attributes(graph, assignment, 'NEW')
+
+        # Define our initial partition
+        initial_partition = GeographicPartition(graph, self.params['districts'], my_updaters)
 
         m = len(initial_partition.assignment.parts)
 
@@ -129,7 +134,7 @@ class Chain:
             population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
 
             # Construct our Markov Chain
-            self.chain = MarkovChain(proposal = proposals.propose_random_flip,
+            self.chain = MC2(proposal = proposals.propose_random_flip,
                                 constraints=[constraints.single_flip_contiguous, compactness_bound, population_constraint],
                                 accept=accept.always_accept,
                                 initial_state=initial_partition,
@@ -141,7 +146,7 @@ class Chain:
             a = MetropolisHastings(self.params['weights'], self.params['beta'], election=self.params['election'], custom=self.params['custom'], environments=self.params['pe_comb_filename'], populations=self.params['population_filename'])
 
             # Construct our Markov Chain
-            self.chain = MarkovChain(proposal = proposals.propose_random_flip,
+            self.chain = MC2(proposal = proposals.propose_random_flip,
                                 constraints=[constraints.single_flip_contiguous],
                                 accept=a,
                                 initial_state=initial_partition,
@@ -155,8 +160,8 @@ class Chain:
             population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
 
             # Construct our Markov Chain
-            self.chain = MarkovChain(proposal = recom_proposal,
-                                constraints=[constraints.single_flip_contiguous, compactness_bound, population_constraint],
+            self.chain = MC2(proposal = recom_proposal,
+                                constraints=[compactness_bound, population_constraint],
                                 accept=accept.always_accept,
                                 initial_state=initial_partition,
                                 total_steps=iters)
@@ -167,8 +172,8 @@ class Chain:
             a = MetropolisHastings(self.params['weights'], self.params['beta'], election=self.params['election'], custom=self.params['custom'], environments=self.params['pe_comb_filename'], populations=self.params['population_filename'])
 
             # Construct our Markov Chain
-            self.chain = MarkovChain(proposal = recom_proposal,
-                                constraints=[constraints.single_flip_contiguous],
+            self.chain = MC2(proposal = recom_proposal,
+                                constraints=accept.always_accept,
                                 accept=a,
                                 initial_state=initial_partition,
                                 total_steps=iters)

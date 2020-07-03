@@ -107,17 +107,17 @@ class MetropolisHastings:
         for score_function in partisan:
             if score_function in self.score_functions:
                 assert 'election' in kwargs
-                self.election = election
+                self.election = kwargs['election']
 
         if 'partisan_dislocation' in self.score_functions:
             assert 'populations' in kwargs
-            self.populations = pickle.load(open(populations, 'rb'))
+            self.populations = pickle.load(open(kwargs['populations'], 'rb'))
             assert 'environments' in kwargs
-            self.environments = pickle.load(open(environments, 'rb'))
+            self.environments = pickle.load(open(kwargs['environments'], 'rb'))
 
         if 'custom' in self.score_functions:
             assert 'custom' in kwargs
-            self.custom = custom
+            self.custom = kwargs['custom']
 
         # Construct an array of weights in the same order as the score functions
         self.weights = np.array([weights[sf] for sf in self.score_functions], dtype=np.float64)
