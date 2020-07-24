@@ -164,7 +164,7 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_plots(idnum, kind, subdirectory='Data/', figsize=(8,6), dpi=400, file_type='.pdf'):
+def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
     Given the id number of a chain run, creates relevant plots (Utah data format only).
 
@@ -198,7 +198,12 @@ def make_plots(idnum, kind, subdirectory='Data/', figsize=(8,6), dpi=400, file_t
     assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
 
     # Extract the data
-    data = pd.read_hdf(str(idnum)+'.h5', 'data')
+    if idnum < 1593561600:
+        data = pd.read_hdf(str(idnum)+'.h5', 'data')
+    else:
+        data = pd.read_parquet(str(idnum)+'d.parquet.gzip')
+
+    # Set parameters
     params = {'figsize':figsize, 'dpi':dpi, 'save':True}
     n = len(data)
     m = int((len(data.columns)-21)/5)
@@ -423,7 +428,10 @@ def precincts_moving_frequency(idnum, subdirectory='Data/', save=False):
         recorded times that the precinct changed assignments
     """
     # Extract the data
-    assignments = pd.read_hdf(str(idnum)+'.h5', 'stored_assignments')
+    if idnum < 1593561600:
+        assignments = pd.read_hdf(str(idnum)+'.h5', 'stored_assignments')
+    else:
+        assignments= pd.read_parquet(str(idnum)+'a.parquet.gzip')
     n = len(assignments)
 
     # Compute the changes
