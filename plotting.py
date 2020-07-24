@@ -37,7 +37,7 @@ def plot_district_map(assignment, size=(3,2), dpi=300, precincts='UtahData/18_Pr
     plt.axis("off")
 
     # Save if desired
-    if save: plt.savefig(savetitle+'.png', dpi=dpi)
+    if save: plt.savefig(savetitle, dpi=dpi)
     plt.show()
 
 def plot_graph(precincts, graph, window=None, node_size=0.1, line_size=0.05, dpi=400, size=7, save=False, savetitle=None):
@@ -163,6 +163,56 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
 
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
+
+# Analyzing the rejection rate of a chain
+def acceptance_series(d):
+    """
+    Creates an np.array with length d.shape[0], where the ith entry is 1 if
+    rows i and i-1 of d are different, and 0 otherwise.
+
+    Parameters:
+        d (iterable)
+
+    Returns:
+        s (np.array)
+    """
+    series = np.zeros(d.shape[0], dtype=np.uint8)
+    for i in range(1, d.shape[0]):
+        if not np.allclose(d.iloc[i, :], d.iloc[i-1, :]):
+            series[i] = 1
+    return series
+
+def running_mean(x, N):
+    """
+    Returns a moving average array of the data in x over an N-period interval.
+
+    Parameters:
+        x (iterable)
+
+    Returns:
+        m (np.array)
+    """
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+def plot_acceptance_rate(data, period):
+    """
+    Plot the (period)-moving-average of the acceptance rate of a chain.
+
+    Parameters:
+        data (pd.DataFrame)
+        period (int): the number of iterations to average over
+    """
+    s = acceptance_series(data)
+
+    # Position the moving average at the center of the period it is the average over
+    plt.plot(np.linspace(period/2, len(s)-period/2, len(s)-period+1), running_mean(s, period))
+
+    plt.title('{}-Iteration Moving Average Acceptance Rate'.format(period))
+    plt.ylabel('Acceptance Rate')
+    plt.xlabel('Iteration')
+    plt.axis([0, len(s), 0, 1])
+    plt.show()
 
 def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
