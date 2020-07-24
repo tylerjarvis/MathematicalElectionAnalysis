@@ -39,6 +39,9 @@ class Chain:
                 4) 'recom-mh' means using the recom proposal with weighted
                 Metropolis-Hastings acceptance function
         """
+
+        self.id = int(np.round(time.time(), 0))
+
         # Types of chain runs which are possible
         allowable_kinds = ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
 
@@ -69,8 +72,6 @@ class Chain:
         # Check kind parameter
         assert kind in allowable_kinds
         self.kind = kind
-
-        self.id = int(np.round(time.time(), 0))
 
         # Set parameters
         self.params = defaults.copy()
@@ -285,9 +286,12 @@ class OldChain:
         if self.id < 1591297172:
             self.data = pickle.load(open(str(self.id)+'data.pkl', 'rb'))
             self.assignments = pickle.load(open(str(self.id)+'assignments.pkl', 'rb'))
-        else:
+        elif self.id < 1593561600:
             self.data = pd.read_hdf(str(self.id)+'.h5', 'data')
             self.assignments = pd.read_hdf(str(self.id)+'.h5', 'stored_assignments')
+        else:
+            self.data = pd.read_parquet(str(self.id)+'d.parquet.gzip')
+            self.assignments = pd.read_parquet(str(self.id)+'a.parquet.gzip')
         try:
             self.length = self.params['length']
             self.kind = self.params['kind']
