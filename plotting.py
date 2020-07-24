@@ -164,7 +164,7 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_plots(idnum, kind, subdirectory='Data/', figsize=(8,6), dpi=400, file_type='.pdf'):
+def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
     Given the id number of a chain run, creates relevant plots (Utah data format only).
 
