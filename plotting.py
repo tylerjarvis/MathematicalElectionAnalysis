@@ -214,13 +214,14 @@ def plot_acceptance_rate(data, period):
     plt.axis([0, len(s), 0, 1])
     plt.show()
 
-def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_type='.pdf'):
+def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
     Given the id number of a chain run, creates relevant plots (Utah data format only).
 
     Parameters:
         idnum (int): the Unix timestamp of the second when the chain was created
                     (part of the filename)
+                    note: if idnum is string, will use the given name of the file
         kind (str): the type of chain run
         subdirectory (str): the subdirectory to save the resulting plots to
         figsize (tup): the desired figure size for the plots. Default: (8, 6)
@@ -248,10 +249,13 @@ def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_t
     assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
 
     # Extract the data
-    if idnum < 1593561600:
-        data = pd.read_hdf(str(idnum)+'.h5', 'data')
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_parquet(str(idnum)+'d.parquet.gzip')
     else:
-        data = pd.read_parquet(str(idnum)+'d.parquet.gzip')
+        data = pd.read_hdf(idnum)
 
     # Set parameters
     params = {'figsize':figsize, 'dpi':dpi, 'save':True}
@@ -460,6 +464,77 @@ def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_t
         plt.clf()
 
         print('Finished Plot: {}'.format(key))
+
+        plt.close('all')
+
+
+def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
+    """
+    Produces a set of correlation plots used to analyze how well the partisan gerrymandering metrics
+    perform in the case of Utah.
+
+    Parameters:
+        idnum (int): the unix timestamp for when the chain was started.
+            if passed in as str, the filename of the chain
+        subdirectory (str): the subdirectory to save the resulting plots
+
+    Total: 15 plots.
+    """
+    assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+
+    # Extract the data
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_hdf(idnum)
+    else:
+        data = pd.read_parquet(idnum)
+        idnum = ''
+
+
+
+
+    # Set parameters
+    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+file_type
+
+    # Set parameters
+    params = {'figsize':figsize, 'dpi':dpi, 'save':True}
+    n = len(data)
+
+
+    correlationplot_xaxis = {'Avg Abs Partisan Dislocation': {'name': 'Average Absolute Partisan Dislocation', 'savetitle':'AvgAbsPD'},
+                             'Efficiency Gap': {'name':'Efficiency Gap', 'savetitle':'EG'},
+                             'Mean Median': {'name':'Mean Median Score', 'savetitle':'MM'},
+                             'Partisan Bias': {'name':'Partisan Bias Score', 'savetitle':'PB'},
+                             'Partisan Gini': {'name':'Partisan Gini Score', 'savetitle':'PG'}}
+
+    correlationplot_yaxis = {' - G': 'Sorted GRep Vote Share 1', ' - SEN':'Sorted SenRep Vote Share 1', ' - COMB':'Sorted CombRep Vote Share 1'}
+
+    # Construct plots for the various metrics
+    for key, val in {' - G': ' (Gubernatorial 2010)', ' - SEN':' (Senate 2010)', ' - COMB':' (Combined 2010)'}.items():
+        for key1 in correlationplot_xaxis.keys():
+            fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+            x = np.array(data[key1+key])
+            y = np.array(data[correlationplot_yaxis[key]])
+
+            SStot = np.sum(np.square(y-np.mean(y)))
+            p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+            m, c = p[0], p[1]
+            SSres = np.sum(residuals)
+            R2 = 1-SSres/SStot
+            domain = np.linspace(np.min(x), np.max(x), 200)
+
+            plt.scatter(data[key1+key], data[correlationplot_yaxis[key]], s=1, alpha=0.3, label='Data')
+            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2,2), m), c='orange')
+            ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+val)
+            ax.set_xlabel(correlationplot_xaxis[key1]['name'])
+            ax.set_ylabel('R Vote Share in Least R District')
+            plt.legend(loc='upper right')
+            plt.savefig(subdirectory+correlationplot_xaxis[key1]['savetitle']+'Correlation'+common_file_ending, dpi=dpi, bbox_inches='tight')
+            plt.clf()
+
+            print('Finished Plot')
 
         plt.close('all')
 
