@@ -7,7 +7,7 @@ class HashAssignment:
         """
         self.prime = prime
         self.value = 0
-        
+
     def __call__(self,partition):
         if partition.parent is None: #first step in the chain
             return self._initialize_hash(partition)
@@ -15,7 +15,7 @@ class HashAssignment:
 
     def _initialize_hash(self,partition):
         for node, part in partition.assignment.items():
-            self.value += 3*int(part)**int(node)
+            self.value += 3*(part+1)**node
         return self.value % self.prime
 
     def _update_hash(self,partition):
@@ -23,7 +23,7 @@ class HashAssignment:
         parent = partition.parent
         for node,part in flips.items():
             old_assignment = parent.assignment.to_dict()[node]
-            out_flow = (3*(old_assignment)**int(node))%self.prime
-            in_flow = (3*int(part)**int(node))%self.prime
+            out_flow = (3*(old_assignment+1)**node)
+            in_flow = (3*(part+1)**node)
             self.value = (self.value - out_flow + in_flow)%self.prime
         return self.value
