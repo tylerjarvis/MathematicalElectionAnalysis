@@ -509,14 +509,16 @@ def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dp
                              'Partisan Bias': {'name':'Partisan Bias Score', 'savetitle':'PB'},
                              'Partisan Gini': {'name':'Partisan Gini Score', 'savetitle':'PG'}}
 
-    correlationplot_yaxis = {' - G': 'Sorted GRep Vote Share 1', ' - SEN':'Sorted SenRep Vote Share 1', ' - COMB':'Sorted CombRep Vote Share 1'}
+    correlationplot_yaxis = {'G': {'ending': ' - G', 'colname': 'Sorted GRep Vote Share 1', 'title': ' (Gubernatorial 2010)'},
+                             'SEN': {'ending': ' - SEN', 'colname': 'Sorted SenRep Vote Share 1', 'title': ' (Senate 2010)'},
+                             'COMB': {'ending': ' - COMB', 'colname':'Sorted CombRep Vote Share 1', 'title':' (Combined 2010)'}}
 
     # Construct plots for the various metrics
-    for key, val in {' - G': ' (Gubernatorial 2010)', ' - SEN':' (Senate 2010)', ' - COMB':' (Combined 2010)'}.items():
+    for key in correlationplot_yaxis.keys():
         for key1 in correlationplot_xaxis.keys():
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-            x = np.array(data[key1+key])
-            y = np.array(data[correlationplot_yaxis[key]])
+            x = np.array(data[key1+correlationplot_yaxis[key]['ending']])
+            y = np.array(data[correlationplot_yaxis[key]['colname']])
 
             SStot = np.sum(np.square(y-np.mean(y)))
             p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
@@ -525,13 +527,13 @@ def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dp
             R2 = 1-SSres/SStot
             domain = np.linspace(np.min(x), np.max(x), 200)
 
-            plt.scatter(data[key1+key], data[correlationplot_yaxis[key]], s=1, alpha=0.3, label='Data')
-            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2,2), m), c='orange')
-            ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+val)
+            plt.scatter(x, y, s=1, alpha=0.3, label='Data')
+            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2,2), np.round(m, 2)), c='orange')
+            ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+correlationplot_yaxis[key]['title'])
             ax.set_xlabel(correlationplot_xaxis[key1]['name'])
             ax.set_ylabel('R Vote Share in Least R District')
             plt.legend(loc='upper right')
-            plt.savefig(subdirectory+correlationplot_xaxis[key1]['savetitle']+'Correlation'+common_file_ending, dpi=dpi, bbox_inches='tight')
+            plt.savefig(subdirectory+correlationplot_xaxis[key1]['savetitle']+key+'Correlation'+common_file_ending, dpi=dpi, bbox_inches='tight')
             plt.clf()
 
             print('Finished Plot')
