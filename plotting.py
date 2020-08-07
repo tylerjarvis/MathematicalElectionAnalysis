@@ -468,7 +468,7 @@ def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_
         plt.close('all')
 
 
-def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
+def make_correlation_plots(idnum, kind, comment='', step=None, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
     Produces a set of correlation plots used to analyze how well the partisan gerrymandering metrics
     perform in the case of Utah.
@@ -492,15 +492,14 @@ def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dp
         data = pd.read_parquet(idnum)
         idnum = ''
 
-
-
-
     # Set parameters
-    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+file_type
+    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+comment+file_type
 
     # Set parameters
     params = {'figsize':figsize, 'dpi':dpi, 'save':True}
     n = len(data)
+    if step is None:
+        step = max(1, int(n/10000))
 
 
     correlationplot_xaxis = {'Avg Abs Partisan Dislocation': {'name': 'Average Absolute Partisan Dislocation', 'savetitle':'AvgAbsPD'},
@@ -517,8 +516,21 @@ def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dp
     for key in correlationplot_yaxis.keys():
         for key1 in correlationplot_xaxis.keys():
             fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-            x = np.array(data[key1+correlationplot_yaxis[key]['ending']])
-            y = np.array(data[correlationplot_yaxis[key]['colname']])
+            if key1 in ['Mean Median', 'Partisan Bias', 'Efficiency Gap']:
+                x = -np.array(data[key1+correlationplot_yaxis[key]['ending']])[::step]
+            else:
+                x = np.array(data[key1+correlationplot_yaxis[key]['ending']])[::step]
+            y = np.array(data[correlationplot_yaxis[key]['colname']])[::step]
+            m = int(len(x)/10)
+
+            for i in range(10):
+                x1 = x[i*m:(i+1)*m].copy()
+                y1 = y[i*m:(i+1)*m].copy()
+                plt.scatter(x1, y1, s=1, alpha=0.3)
+
+            if key1 in ['Mean Median', 'Partisan Bias', 'Efficiency Gap']:
+                ax.axvline(0.0, color="#cccccc")
+
 
             SStot = np.sum(np.square(y-np.mean(y)))
             p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
@@ -527,8 +539,8 @@ def make_correlation_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dp
             R2 = 1-SSres/SStot
             domain = np.linspace(np.min(x), np.max(x), 200)
 
-            plt.scatter(x, y, s=1, alpha=0.3, label='Data')
-            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2,2), np.round(m, 2)), c='orange')
+            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2, 2), np.round(m, 2)), c='orange')
+            ax.axhline(0.5, color="#cccccc")
             ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+correlationplot_yaxis[key]['title'])
             ax.set_xlabel(correlationplot_xaxis[key1]['name'])
             ax.set_ylabel('R Vote Share in Least R District')
