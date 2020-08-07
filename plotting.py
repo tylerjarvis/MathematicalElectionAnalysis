@@ -552,7 +552,7 @@ def make_correlation_plots(idnum, kind, comment='', step=None, subdirectory='Plo
 
         plt.close('all')
 
-def precincts_moving_frequency(idnum, subdirectory='Data/', save=False):
+def precincts_moving_frequency(idnum, subdirectory='Plots/', save=False):
     """
     Given the id number of a chain run, generates an array mapping precinct ids to
     the number of recorded times that that precinct changed assignments.
@@ -582,3 +582,66 @@ def precincts_moving_frequency(idnum, subdirectory='Data/', save=False):
 
     # Result the result if desired
     return np.count_nonzero(changes, axis=1)
+
+def create_overlapping_histogram(idnum, kind, discard=0.1, comment='', subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
+    """
+    Produces histograms to visualize the distribution of least R district vote shares in Utah
+
+    Parameters:
+        idnum (int): the unix timestamp for when the chain was started.
+            if passed in as str, the filename of the chain
+        subdirectory (str): the subdirectory to save the resulting plots
+
+    Total: 3 plots.
+    """
+    assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+
+    # Extract the data
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_hdf(idnum)
+    else:
+        data = pd.read_parquet(idnum)
+        idnum = ''
+
+    # Set parameters
+    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+comment+file_type
+
+    # Set parameters
+    params = {'figsize':figsize, 'dpi':dpi, 'save':True}
+    n = len(data)
+    m = int(n/10)
+
+
+    hist_vals = {'G': {'ending': ' - G', 'colname': 'Sorted GRep Vote Share 1', 'title': ' (Gubernatorial 2010)'},
+                 'SEN': {'ending': ' - SEN', 'colname': 'Sorted SenRep Vote Share 1', 'title': ' (Senate 2010)'},
+                 'COMB': {'ending': ' - COMB', 'colname':'Sorted CombRep Vote Share 1', 'title':' (Combined 2010)'}}
+
+    # Construct plots for the various metrics
+    for key in hist_vals.keys():
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+        x = np.array(data[hist_vals[key]['colname']])
+
+        for i in range(10):
+            if i > 0:
+                label = 'Recom {}'.format(i)
+            else:
+                label = 'Original'
+            x1 = pd.Series(x[i*m:(i+1)*m].copy())
+            x1[int(discard*m):].hist(ax = ax, bins = 99, alpha = .1, color='C'+str(i))
+            x1[int(discard*m):].hist(ax = ax, histtype='step', bins = 99, lw=3, facecolor='None', color='C'+str(i), label=label)
+            ax.axvline(x1[0], lw=2, color='C'+str(i))
+
+        ax.axvline(0.5, color="#cccccc")
+        ax.set_title('R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+hist_vals[key]['title'])
+        ax.set_ylabel('Number of Plans in Ensemble')
+        ax.set_xlabel('R Vote Share in Least R District'+hist_vals[key]['title'])
+        plt.legend(loc='upper right')
+        plt.savefig(subdirectory+key+'Hist'+common_file_ending, dpi=dpi, bbox_inches='tight')
+        plt.clf()
+
+        print('Finished Plot')
+
+        plt.close('all')
