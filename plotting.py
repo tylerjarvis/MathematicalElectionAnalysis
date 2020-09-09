@@ -8,7 +8,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from shapely.geometry import LineString
 
-def plot_district_map(assignment, size=(3,2), dpi=300, precincts='UtahData/18_Precincts_combined_contiguous-Copy1.shp', save=False, savetitle=None):
+def plot_district_map(assignment, size=(3,2), dpi=300, cmap='viridis', precincts='UtahData/gdf_august.shp', save=False, savetitle=None):
     """
     Given a districting assignment, plots the state of Utah divided into the given districts using 2018 precinct data.
 
@@ -33,7 +33,7 @@ def plot_district_map(assignment, size=(3,2), dpi=300, precincts='UtahData/18_Pr
 
     # Plot the data
     fig, ax = plt.subplots(figsize=size, dpi=dpi)
-    precincts.plot(column='plot_val', ax=ax)
+    precincts.plot(column='plot_val', ax=ax, cmap=cmap)
     plt.axis("off")
 
     # Save if desired

@@ -15,8 +15,10 @@ def predecessors(h, root):
 def random_spanning_tree(graph):
     for edge in graph.edges:
         graph.edges[edge]["weight"] = random.random()
+        if graph.nodes[edge[0]]['CountyID'] != graph.nodes[edge[0]]['CountyID']:
+            graph.edge[edge]['weight'] += 1
 
-    spanning_tree = tree.maximum_spanning_tree(
+    spanning_tree = tree.minimum_spanning_tree(
         graph, algorithm="kruskal", weight="weight"
     )
     return spanning_tree
@@ -284,11 +286,12 @@ def recom(
     return partition.flip(flips)
 
 class ReCom:
-    def __init__(self, pop_col, ideal_pop, epsilon, method=bipartition_tree):
+    def __init__(self, pop_col, ideal_pop, epsilon, node_repeats, method=bipartition_tree):
         self.pop_col = pop_col
         self.ideal_pop = ideal_pop
         self.epsilon = epsilon
         self.method = method
+        self.node_repeats = node_repeats
 
     def __call__(self, partition):
-        return recom(partition, self.pop_col, self.ideal_pop, self.epsilon, method=self.method)
+        return recom(partition, self.pop_col, self.ideal_pop, self.epsilon, self.node_repeats, method=self.method)

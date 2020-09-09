@@ -43,21 +43,21 @@ class Chain:
         self.id = int(np.round(time.time(), 0))
 
         # Types of chain runs which are possible
-        allowable_kinds = ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+        allowable_kinds = ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh', 'recom-sp-uniform']
 
         defaults = {'storage_ratio': 100,
                     'checkpoint_ratio': 1000000,
-                    'graph': 'ChainUtilityData/graph_combined_vs_2018.json',
+                    'graph': 'ChainUtilityData/graph_august.json',
                     'state': 'UT',
                     'districts': 'US_Distric',
                     'compactness_ratio': 1.25,
                     'population_wiggle': 0.01,
                     'weights': {'cut_edges': 0.5, 'pop_mattingly': 100},
                     'beta': 1,
-                    'population_filename': 'ChainUtilityData/populations_mp_sp.pkl',
-                    'pe_gov_filename': 'ChainUtilityData/partisan_environments_mp_sp_G.pkl',
-                    'pe_sen_filename': 'ChainUtilityData/partisan_environments_mp_sp_SEN.pkl',
-                    'pe_comb_filename': 'ChainUtilityData/partisan_environments_combined.pkl',
+                    'population_filename': 'ChainUtilityData/pops_august.pkl',
+                    'pe_gov_filename': 'ChainUtilityData/pe_gov_august.pkl',
+                    'pe_sen_filename': 'ChainUtilityData/pe_sen_august.pkl',
+                    'pe_comb_filename': 'ChainUtilityData/pe_comb_august.pkl',
                     'pop_col': 'POP100',
                     'starting_assignment': 'current_plan',
                     'partisan_estimators': ['SEN10', 'G10', 'COMB10'],
@@ -177,6 +177,28 @@ class Chain:
             self.chain = MC2(proposal = recom_proposal,
                                 constraints=accept.always_accept,
                                 accept=a,
+                                initial_state=initial_partition,
+                                total_steps=iters)
+
+        elif kind == 'recom-sp-uniform':
+
+            from my_recom import ReCom
+
+            recom_proposal = ReCom(
+                   pop_col=self.params['pop_col'],
+                   ideal_pop=ideal_population,
+                   epsilon=self.params['recom_epsilon'],
+                   node_repeats=self.params['recom_node_repeats']
+                  )
+
+            # Enforce a compactness bound
+            compactness_bound = constraints.UpperBound(lambda p: len(p["cut_edges"]), self.params['compactness_ratio']*len(initial_partition["cut_edges"]))
+            population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
+
+            # Construct our Markov Chain
+            self.chain = MC2(proposal = recom_proposal,
+                                constraints=[compactness_bound, population_constraint],
+                                accept=accept.always_accept,
                                 initial_state=initial_partition,
                                 total_steps=iters)
 
