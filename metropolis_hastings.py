@@ -111,9 +111,9 @@ class MetropolisHastings:
 
         if 'partisan_dislocation' in self.score_functions:
             assert 'populations' in kwargs
-            self.populations = pickle.load(open(kwargs['populations'], 'rb'))
+            self.populations = np.load(kwargs['populations'])
             assert 'environments' in kwargs
-            self.environments = pickle.load(open(kwargs['environments'], 'rb'))
+            self.environments = np.load(kwargs['environments'])
 
         if 'custom' in self.score_functions:
             assert 'custom' in kwargs

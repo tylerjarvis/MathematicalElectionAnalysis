@@ -47,17 +47,17 @@ class Chain:
 
         defaults = {'storage_ratio': 100,
                     'checkpoint_ratio': 1000000,
-                    'graph': 'ChainUtilityData/graph_august.json',
+                    'graph': 'ChainUtilityData/2018_all_votes_current_no_nan.json',
                     'state': 'UT',
                     'districts': 'US_Distric',
                     'compactness_ratio': 1.25,
                     'population_wiggle': 0.01,
                     'weights': {'cut_edges': 0.5, 'pop_mattingly': 100},
                     'beta': 1,
-                    'population_filename': 'ChainUtilityData/pops_august.pkl',
-                    'pe_gov_filename': 'ChainUtilityData/pe_gov_august.pkl',
-                    'pe_sen_filename': 'ChainUtilityData/pe_sen_august.pkl',
-                    'pe_comb_filename': 'ChainUtilityData/pe_comb_august.pkl',
+                    'population_filename': 'ChainUtilityData/2018_all_votes_current_pop.npy',
+                    'pe_gov_filename': 'ChainUtilityData/2018_all_votes_current_pe_gov.npy',
+                    'pe_sen_filename': 'ChainUtilityData/2018_all_votes_current_pe_sen.npy',
+                    'pe_comb_filename': 'ChainUtilityData/2018_all_votes_current_pe_comb.npy',
                     'pop_col': 'POP100',
                     'starting_assignment': 'current_plan',
                     'partisan_estimators': ['SEN10', 'G10', 'COMB10'],
@@ -111,9 +111,9 @@ class Chain:
         m = len(initial_partition.assignment.parts)
 
         # Define tools for partisan environment
-        partisan_environments_sen = pickle.load(open(self.params['pe_sen_filename'], 'rb'))
-        partisan_environments_gov = pickle.load(open(self.params['pe_gov_filename'], 'rb'))
-        partisan_environments_comb = pickle.load(open(self.params['pe_comb_filename'], 'rb'))
+        partisan_environments_sen = np.load(self.params['pe_sen_filename'])
+        partisan_environments_gov = np.load(self.params['pe_gov_filename'])
+        partisan_environments_comb = np.load(self.params['pe_comb_filename'])
 
         populations = np.array([graph.nodes[n][self.params['pop_col']] for n in graph.nodes], dtype=np.float64)
 
