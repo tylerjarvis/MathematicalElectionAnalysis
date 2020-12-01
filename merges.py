@@ -253,7 +253,7 @@ def perform_dissolve_graph(graph, dissolve, attributes_to_sum = ['area', 'SHAPE_
     n = len(graph)
 
     # Construct a dictionary from the dissovle array
-    dissolve_dict = {old_id:new_id for old_id, new_id in enumerate(dissolve)} # old_id --> new_id
+    dissolve_dict = {int(old_id):int(new_id) for old_id, new_id in enumerate(dissolve)} # old_id --> new_id
 
     # Relabel the nodes
     new_graph = nx.relabel.relabel_nodes(graph, dissolve_dict)
@@ -261,12 +261,9 @@ def perform_dissolve_graph(graph, dissolve, attributes_to_sum = ['area', 'SHAPE_
     # Relabel the attributes
     for new_id in dissolve_dict.values():
 
-        original_nodes = list(np.nonzero(dissolve == new_id)[0])
+        original_nodes = list(int(n) for n in list(np.nonzero(dissolve == new_id)[0]))
 
         if len(original_nodes) > 1:
-            # We have to fix the attributes
-
-            original_nodes = list(np.nonzero(dissolve == new_id)[0])
 
             # Set attributes
 
@@ -301,7 +298,7 @@ def perform_dissolve_graph(graph, dissolve, attributes_to_sum = ['area', 'SHAPE_
             for j, val in new_graph[new_id].items():
 
                 # j new id of neighbor. We need to get the preimage ids of neighbors
-                neighbors = list(np.nonzero(dissolve == j)[0])
+                neighbors = list(int(n) for n in list(np.nonzero(dissolve == j)[0]))
 
                 shared_perim = sum(sum(graph[i][n]['shared_perim'] for n in neighbors if n in graph[i]) for i in original_nodes)
 
@@ -437,7 +434,7 @@ def get_separators(graph):
     return ids, neighbor_ids, separations, merge
 
 def highlight_discontiguities(graph, gdf, preserve=['CountyID', 'US_Distric', 'UT_SEN', 'UT_HOUSE']):
-
+    pass
 
 def merge_multipolygons(graph, gdf, preserve=['CountyID', 'US_Distric', 'UT_SEN', 'UT_HOUSE']):
     """

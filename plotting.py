@@ -8,7 +8,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from shapely.geometry import LineString
 
-def plot_district_map(assignment, size=(3,2), dpi=300, precincts='UtahData/18_Precincts_combined_contiguous-Copy1.shp', save=False, savetitle=None):
+def plot_district_map(assignment, size=(3,2), dpi=300, cmap='viridis', precincts='UtahData/gdf_august.shp', save=False, savetitle=None):
     """
     Given a districting assignment, plots the state of Utah divided into the given districts using 2018 precinct data.
 
@@ -33,11 +33,11 @@ def plot_district_map(assignment, size=(3,2), dpi=300, precincts='UtahData/18_Pr
 
     # Plot the data
     fig, ax = plt.subplots(figsize=size, dpi=dpi)
-    precincts.plot(column='plot_val', ax=ax)
+    precincts.plot(column='plot_val', ax=ax, cmap=cmap)
     plt.axis("off")
 
     # Save if desired
-    if save: plt.savefig(savetitle+'.png', dpi=dpi)
+    if save: plt.savefig(savetitle, dpi=dpi)
     plt.show()
 
 def plot_graph(precincts, graph, window=None, node_size=0.1, line_size=0.05, dpi=400, size=7, save=False, savetitle=None):
@@ -164,13 +164,64 @@ def make_violin_plot(data, title='', ylabel='', xlabel='', figsize=(6,8), dpi=40
     if save: plt.savefig(savetitle, dpi=dpi, bbox_inches='tight')
     plt.clf()
 
-def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_type='.pdf'):
+# Analyzing the rejection rate of a chain
+def acceptance_series(d):
+    """
+    Creates an np.array with length d.shape[0], where the ith entry is 1 if
+    rows i and i-1 of d are different, and 0 otherwise.
+
+    Parameters:
+        d (iterable)
+
+    Returns:
+        s (np.array)
+    """
+    series = np.zeros(d.shape[0], dtype=np.uint8)
+    for i in range(1, d.shape[0]):
+        if not np.allclose(d.iloc[i, :], d.iloc[i-1, :]):
+            series[i] = 1
+    return series
+
+def running_mean(x, N):
+    """
+    Returns a moving average array of the data in x over an N-period interval.
+
+    Parameters:
+        x (iterable)
+
+    Returns:
+        m (np.array)
+    """
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+def plot_acceptance_rate(data, period):
+    """
+    Plot the (period)-moving-average of the acceptance rate of a chain.
+
+    Parameters:
+        data (pd.DataFrame)
+        period (int): the number of iterations to average over
+    """
+    s = acceptance_series(data)
+
+    # Position the moving average at the center of the period it is the average over
+    plt.plot(np.linspace(period/2, len(s)-period/2, len(s)-period+1), running_mean(s, period))
+
+    plt.title('{}-Iteration Moving Average Acceptance Rate'.format(period))
+    plt.ylabel('Acceptance Rate')
+    plt.xlabel('Iteration')
+    plt.axis([0, len(s), 0, 1])
+    plt.show()
+
+def make_plots(idnum, kind, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
     """
     Given the id number of a chain run, creates relevant plots (Utah data format only).
 
     Parameters:
         idnum (int): the Unix timestamp of the second when the chain was created
                     (part of the filename)
+                    note: if idnum is string, will use the given name of the file
         kind (str): the type of chain run
         subdirectory (str): the subdirectory to save the resulting plots to
         figsize (tup): the desired figure size for the plots. Default: (8, 6)
@@ -198,10 +249,13 @@ def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_t
     assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
 
     # Extract the data
-    if idnum < 1593561600:
-        data = pd.read_hdf(str(idnum)+'.h5', 'data')
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_parquet(str(idnum)+'d.parquet.gzip')
     else:
-        data = pd.read_parquet(str(idnum)+'d.parquet.gzip')
+        data = pd.read_hdf(idnum)
 
     # Set parameters
     params = {'figsize':figsize, 'dpi':dpi, 'save':True}
@@ -413,7 +467,92 @@ def make_plots(idnum, kind, subdirectory='Plots', figsize=(8,6), dpi=400, file_t
 
         plt.close('all')
 
-def precincts_moving_frequency(idnum, subdirectory='Data/', save=False):
+
+def make_correlation_plots(idnum, kind, comment='', step=None, subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
+    """
+    Produces a set of correlation plots used to analyze how well the partisan gerrymandering metrics
+    perform in the case of Utah.
+
+    Parameters:
+        idnum (int): the unix timestamp for when the chain was started.
+            if passed in as str, the filename of the chain
+        subdirectory (str): the subdirectory to save the resulting plots
+
+    Total: 15 plots.
+    """
+    assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+
+    # Extract the data
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_hdf(idnum)
+    else:
+        data = pd.read_parquet(idnum)
+        idnum = ''
+
+    # Set parameters
+    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+comment+file_type
+
+    # Set parameters
+    params = {'figsize':figsize, 'dpi':dpi, 'save':True}
+    n = len(data)
+    if step is None:
+        step = max(1, int(n/10000))
+
+
+    correlationplot_xaxis = {'Avg Abs Partisan Dislocation': {'name': 'Average Absolute Partisan Dislocation', 'savetitle':'AvgAbsPD'},
+                             'Efficiency Gap': {'name':'Efficiency Gap', 'savetitle':'EG'},
+                             'Mean Median': {'name':'Mean Median Score', 'savetitle':'MM'},
+                             'Partisan Bias': {'name':'Partisan Bias Score', 'savetitle':'PB'},
+                             'Partisan Gini': {'name':'Partisan Gini Score', 'savetitle':'PG'}}
+
+    correlationplot_yaxis = {'G': {'ending': ' - G', 'colname': 'Sorted GRep Vote Share 1', 'title': ' (Gubernatorial 2010)'},
+                             'SEN': {'ending': ' - SEN', 'colname': 'Sorted SenRep Vote Share 1', 'title': ' (Senate 2010)'},
+                             'COMB': {'ending': ' - COMB', 'colname':'Sorted CombRep Vote Share 1', 'title':' (Combined 2010)'}}
+
+    # Construct plots for the various metrics
+    for key in correlationplot_yaxis.keys():
+        for key1 in correlationplot_xaxis.keys():
+            fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+            if key1 in ['Mean Median', 'Partisan Bias', 'Efficiency Gap']:
+                x = -np.array(data[key1+correlationplot_yaxis[key]['ending']])[::step]
+            else:
+                x = np.array(data[key1+correlationplot_yaxis[key]['ending']])[::step]
+            y = np.array(data[correlationplot_yaxis[key]['colname']])[::step]
+            m = int(len(x)/10)
+
+            for i in range(10):
+                x1 = x[i*m:(i+1)*m].copy()
+                y1 = y[i*m:(i+1)*m].copy()
+                plt.scatter(x1, y1, s=1, alpha=0.3)
+
+            if key1 in ['Mean Median', 'Partisan Bias', 'Efficiency Gap']:
+                ax.axvline(0.0, color="#cccccc")
+
+
+            SStot = np.sum(np.square(y-np.mean(y)))
+            p, residuals, _, _, _ = np.polyfit(x, y, 1, full=True)
+            m, c = p[0], p[1]
+            SSres = np.sum(residuals)
+            R2 = 1-SSres/SStot
+            domain = np.linspace(np.min(x), np.max(x), 200)
+
+            plt.plot(domain, m*domain+c, label='Best Fit, R^2={}, m={}'.format(np.round(R2, 2), np.round(m, 2)), c='orange')
+            ax.axhline(0.5, color="#cccccc")
+            ax.set_title(correlationplot_xaxis[key1]['name']+' and R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+correlationplot_yaxis[key]['title'])
+            ax.set_xlabel(correlationplot_xaxis[key1]['name'])
+            ax.set_ylabel('R Vote Share in Least R District')
+            plt.legend(loc='upper right')
+            plt.savefig(subdirectory+correlationplot_xaxis[key1]['savetitle']+key+'Correlation'+common_file_ending, dpi=dpi, bbox_inches='tight')
+            plt.clf()
+
+            print('Finished Plot')
+
+        plt.close('all')
+
+def precincts_moving_frequency(idnum, subdirectory='Plots/', save=False):
     """
     Given the id number of a chain run, generates an array mapping precinct ids to
     the number of recorded times that that precinct changed assignments.
@@ -443,3 +582,66 @@ def precincts_moving_frequency(idnum, subdirectory='Data/', save=False):
 
     # Result the result if desired
     return np.count_nonzero(changes, axis=1)
+
+def create_overlapping_histogram(idnum, kind, discard=0.1, comment='', subdirectory='Plots/', figsize=(8,6), dpi=400, file_type='.pdf'):
+    """
+    Produces histograms to visualize the distribution of least R district vote shares in Utah
+
+    Parameters:
+        idnum (int): the unix timestamp for when the chain was started.
+            if passed in as str, the filename of the chain
+        subdirectory (str): the subdirectory to save the resulting plots
+
+    Total: 3 plots.
+    """
+    assert kind in ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+
+    # Extract the data
+    if type(idnum) == int:
+        if idnum < 1593561600:
+            data = pd.read_hdf(str(idnum)+'.h5', 'data')
+        else:
+            data = pd.read_hdf(idnum)
+    else:
+        data = pd.read_parquet(idnum)
+        idnum = ''
+
+    # Set parameters
+    common_file_ending = '-'+str(len(data))+'-'+kind+'-'+str(idnum)+comment+file_type
+
+    # Set parameters
+    params = {'figsize':figsize, 'dpi':dpi, 'save':True}
+    n = len(data)
+    m = int(n/10)
+
+
+    hist_vals = {'G': {'ending': ' - G', 'colname': 'Sorted GRep Vote Share 1', 'title': ' (Gubernatorial 2010)'},
+                 'SEN': {'ending': ' - SEN', 'colname': 'Sorted SenRep Vote Share 1', 'title': ' (Senate 2010)'},
+                 'COMB': {'ending': ' - COMB', 'colname':'Sorted CombRep Vote Share 1', 'title':' (Combined 2010)'}}
+
+    # Construct plots for the various metrics
+    for key in hist_vals.keys():
+        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+        x = np.array(data[hist_vals[key]['colname']])
+
+        for i in range(10):
+            if i > 0:
+                label = 'Recom {}'.format(i)
+            else:
+                label = 'Original'
+            x1 = pd.Series(x[i*m:(i+1)*m].copy())
+            x1[int(discard*m):].hist(ax = ax, bins = 99, alpha = .1, color='C'+str(i))
+            x1[int(discard*m):].hist(ax = ax, histtype='step', bins = 99, lw=3, facecolor='None', color='C'+str(i), label=label)
+            ax.axvline(x1[0], lw=2, color='C'+str(i))
+
+        ax.axvline(0.5, color="#cccccc")
+        ax.set_title('R Vote Share in Least R District in a {}-Plan Ensemble'.format(n)+hist_vals[key]['title'])
+        ax.set_ylabel('Number of Plans in Ensemble')
+        ax.set_xlabel('R Vote Share in Least R District'+hist_vals[key]['title'])
+        plt.legend(loc='upper right')
+        plt.savefig(subdirectory+key+'Hist'+common_file_ending, dpi=dpi, bbox_inches='tight')
+        plt.clf()
+
+        print('Finished Plot')
+
+        plt.close('all')

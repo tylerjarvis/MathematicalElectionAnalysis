@@ -43,21 +43,21 @@ class Chain:
         self.id = int(np.round(time.time(), 0))
 
         # Types of chain runs which are possible
-        allowable_kinds = ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh']
+        allowable_kinds = ['flip-uniform', 'flip-mh', 'recom-uniform', 'recom-mh', 'recom-sp-uniform']
 
         defaults = {'storage_ratio': 100,
                     'checkpoint_ratio': 1000000,
-                    'graph': 'graph_combined_vs_2018.json',
+                    'graph': 'ChainUtilityData/2018_all_votes_current_no_nan.json',
                     'state': 'UT',
                     'districts': 'US_Distric',
                     'compactness_ratio': 1.25,
                     'population_wiggle': 0.01,
                     'weights': {'cut_edges': 0.5, 'pop_mattingly': 100},
                     'beta': 1,
-                    'population_filename': 'populations_mp_sp.pkl',
-                    'pe_gov_filename': 'partisan_environments_mp_sp_G.pkl',
-                    'pe_sen_filename': 'partisan_environments_mp_sp_SEN.pkl',
-                    'pe_comb_filename': 'partisan_environments_combined.pkl',
+                    'population_filename': 'ChainUtilityData/2018_all_votes_current_pop.npy',
+                    'pe_gov_filename': 'ChainUtilityData/2018_all_votes_current_pe_gov.npy',
+                    'pe_sen_filename': 'ChainUtilityData/2018_all_votes_current_pe_sen.npy',
+                    'pe_comb_filename': 'ChainUtilityData/2018_all_votes_current_pe_comb.npy',
                     'pop_col': 'POP100',
                     'starting_assignment': 'current_plan',
                     'partisan_estimators': ['SEN10', 'G10', 'COMB10'],
@@ -111,9 +111,9 @@ class Chain:
         m = len(initial_partition.assignment.parts)
 
         # Define tools for partisan environment
-        partisan_environments_sen = pickle.load(open(self.params['pe_sen_filename'], 'rb'))
-        partisan_environments_gov = pickle.load(open(self.params['pe_gov_filename'], 'rb'))
-        partisan_environments_comb = pickle.load(open(self.params['pe_comb_filename'], 'rb'))
+        partisan_environments_sen = np.load(self.params['pe_sen_filename'])
+        partisan_environments_gov = np.load(self.params['pe_gov_filename'])
+        partisan_environments_comb = np.load(self.params['pe_comb_filename'])
 
         populations = np.array([graph.nodes[n][self.params['pop_col']] for n in graph.nodes], dtype=np.float64)
 
@@ -177,6 +177,28 @@ class Chain:
             self.chain = MC2(proposal = recom_proposal,
                                 constraints=accept.always_accept,
                                 accept=a,
+                                initial_state=initial_partition,
+                                total_steps=iters)
+
+        elif kind == 'recom-sp-uniform':
+
+            from my_recom import ReCom
+
+            recom_proposal = ReCom(
+                   pop_col=self.params['pop_col'],
+                   ideal_pop=ideal_population,
+                   epsilon=self.params['recom_epsilon'],
+                   node_repeats=self.params['recom_node_repeats']
+                  )
+
+            # Enforce a compactness bound
+            compactness_bound = constraints.UpperBound(lambda p: len(p["cut_edges"]), self.params['compactness_ratio']*len(initial_partition["cut_edges"]))
+            population_constraint = constraints.within_percent_of_ideal_population(initial_partition, self.params['population_wiggle'])
+
+            # Construct our Markov Chain
+            self.chain = MC2(proposal = recom_proposal,
+                                constraints=[compactness_bound, population_constraint],
+                                accept=accept.always_accept,
                                 initial_state=initial_partition,
                                 total_steps=iters)
 
@@ -258,19 +280,19 @@ class Chain:
                 store['data'] = self.data.copy()
                 store['stored_assignments'] = self.stored_assignments.copy()
         elif self.params['storage_type'] == 'parquet':
-            self.data.to_parquet(str(self.id)+'d.parquet.gzip', compression='gzip')
-            self.stored_assignments.to_parquet(str(self.id)+'a.parquet.gzip', compression='gzip')
+            self.data.to_parquet('ParquetChainData/'+str(self.id)+'d.parquet.gzip', compression='gzip')
+            self.stored_assignments.to_parquet('ParquetChainData/'+str(self.id)+'a.parquet.gzip', compression='gzip')
 
         self.params['custom'] = 'Custom Acceptance Function'
 
         # Log chain run
         try:
-            logdata = pickle.load(open('chain_log.pkl', 'rb'))
+            logdata = pickle.load(open('ParquetChainData/chain_log.pkl', 'rb'))
             logdata.update({self.id: self.params})
-            pickle.dump(logdata, open('chain_log.pkl', 'wb'))
+            pickle.dump(logdata, open('ParquetChainData/chain_log.pkl', 'wb'))
 
         except FileNotFoundError:
-            pickle.dump({self.id: self.params}, open('chain_log.pkl', 'wb'))
+            pickle.dump({self.id: self.params}, open('ParquetChainData/chain_log.pkl', 'wb'))
 
         self.data = data
         self.assignments = stored_assignments
@@ -290,8 +312,8 @@ class OldChain:
             self.data = pd.read_hdf(str(self.id)+'.h5', 'data')
             self.assignments = pd.read_hdf(str(self.id)+'.h5', 'stored_assignments')
         else:
-            self.data = pd.read_parquet(str(self.id)+'d.parquet.gzip')
-            self.assignments = pd.read_parquet(str(self.id)+'a.parquet.gzip')
+            self.data = pd.read_parquet('ParquetChainData/'+str(self.id)+'d.parquet.gzip')
+            self.assignments = pd.read_parquet('ParquetChainData/'+str(self.id)+'a.parquet.gzip')
         try:
             self.length = self.params['length']
             self.kind = self.params['kind']

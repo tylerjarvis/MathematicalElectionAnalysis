@@ -241,6 +241,10 @@ class SplitCounties:
                                     which maps districts to the number of precincts
                                     in that county which fall in that district.
         """
+        # If more than one flip was made, we have to reinitialize
+        if len(partition.flips) > 1:
+            return self.initialize(partition)
+
         # Get the previous info
         county_content = partition.parent[self.alias]
 

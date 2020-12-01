@@ -128,7 +128,7 @@ def surrounding_precincts(g, congress="US_Distric", population="POP100"):
 
     return l
 
-def get_partisan_environments(g, dem_alias="DEM", rep_alias="REP"):
+def get_partisan_environments(g, dem_alias="DEM", rep_alias="REP", s=None):
     """
     This function takes about 3 min to run. It is the initialization for computing
     partisan displocation scores. Unless you have new data, just use the previous
@@ -143,8 +143,9 @@ def get_partisan_environments(g, dem_alias="DEM", rep_alias="REP"):
     Returns:
         p (list): list mapping precinct IDs to the R vote share of their environment
     """
-    # Compute the surrounding precincts (the long part)
-    s = surrounding_precincts(g)
+    if s is None:
+        # Compute the surrounding precincts (the long part)
+        s = surrounding_precincts(g)
 
     compositions = []
 
